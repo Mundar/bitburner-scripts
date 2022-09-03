@@ -1,7 +1,7 @@
 /** @param {NS} ns */
-import {handle_messages} from "include/mcp/messages.js"
-import {added_unused_server} from "include/mcp/idle.js"
-import {remote_servers} from "include/mcp/spider.js"
+import {handle_messages} from "include/mcp/messages.js";
+import {added_unused_server, process_unassigned_targets} from "include/mcp/idle.js";
+import {remote_servers} from "include/mcp/spider.js";
 
 export async function main(ns) {
 	if("home" != ns.getHostname()) { ns.tprint("ERROR: The Master Control Program should only be run on home!"); ns.exit(); }
@@ -14,13 +14,16 @@ export async function main(ns) {
 
 	var s = createState(ns);
 	while(true) {
-		if((s.player.skills.hacking != s.current_hacking_level) || (0 < s.needed_cracks.length)) {
+		if(s.player.skills.hacking != s.current_hacking_level) {
 			ns.print("Detected hacking level change from " + s.current_hacking_level + " to " + s.player.skills.hacking);
 			s.current_hacking_level = s.player.skills.hacking;
-			process_unrooted(s);
 		}
+		process_unrooted(s);
 		if(s.added_unused) {
 			await added_unused_server(s);
+		}
+		if(s.added_target) {
+			await process_unassigned_targets(s);
 		}
 		await handle_messages(s);
 		await ns.sleep(1000);
@@ -41,7 +44,6 @@ function createState(ns) {
 	var remote = remote_servers(ns);
 	var unrooted = [];
 	for (const [key, serv] of remote.entries()) {
-		ns.tprint("Adding server " + key + " (" + serv.server.requiredHackingSkill + ")");
 		unrooted.push(key);
 	}
 	unrooted.reverse();
@@ -58,10 +60,13 @@ function createState(ns) {
 		ps_unused: ps_unused,
 		ps_idle: [],
 		ps_hacking: [],
+		unassigned_targets: [],
+		targets: new Map(),
 		needed_cracks: [],
 		current_hacking_level: 0,
 		next_hacking_level: 1,
 		added_unused: false,
+		added_target: false,
 		idle_script: "",
 		idle_ram: 0,
 		home_reserved: 16,
@@ -164,7 +169,7 @@ function root_server(s, server) {
         else {
             s.ns.print("Server " + server.hostname + " has " + open_ports + " of " + ports + " ports open");
 			var all_cracks = ["SQLInject.exe", "HTTPWorm.exe", "relaySMTP.exe", "FTPCrack.exe", "BruteSSH.exe"];
-			 s.needed_cracks.length = 0;
+			s.needed_cracks = [];
 			while(0 < all_cracks.length) {
 				const crack = all_cracks.pop();
 				if(!s.ns.fileExists(crack, "home")) {

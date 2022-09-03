@@ -52,7 +52,7 @@ async function run_script_on_server(s, server) {
 	}
 }
 
-async function run_script_on_home(s) {
+function run_script_on_home(s) {
 	const server = s.ns.getServer("home");
 	var server_ram = server.maxRam - s.home_reserved - server.ramUsed;
 	if(server_ram > s.home_idle) {
@@ -61,5 +61,43 @@ async function run_script_on_home(s) {
 	var threads = Math.floor(server_ram / s.idle_ram);
 	if (0 < threads) {
 		s.ns.exec(s.idle_script, "home", threads);
+	}
+}
+
+export async function process_unassigned_targets(s) {
+	while(0 < s.unassigned_targets.length) {
+		const target = s.unassigned_targets.pop();
+		var agent;
+		if(0 < s.ps_unused.length) {
+			agent = s.ps_unused.pop();
+		}
+		else if(0 < s.ps_idle.length) {
+			agent = s.ps_idle.pop();
+		}
+		else {
+			continue;
+		}
+		s.ps_hacking.push(agent);
+		if(s.targets.has(target)) {
+			var target_data = s.targets.get(target);
+			target_data.agent = agent;
+		}
+		else {
+			const server = s.ns.getServer(target);
+			s.targets.set(target, {server: server, agent: agent});
+		}
+		await copy_to_server(s, "hack.js", agent);
+		await copy_to_server(s, "grow.js", agent);
+		await copy_to_server(s, "weaken.js", agent);
+		await copy_to_server(s, "hack-exp.js", agent);
+		await s.ns.scp("mcp-single.js", agent);
+		s.ns.exec("mcp-single.js", agent, 1, target)
+	}
+	s.added_target = false;
+}
+
+async function copy_to_server(s, file, target) {
+	if(!s.ns.fileExists(file, target)) {
+		await s.ns.scp(file, target);
 	}
 }
