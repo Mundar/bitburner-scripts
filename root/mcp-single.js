@@ -75,11 +75,18 @@ async function just_weaken(ns, hgw) {
 	ns.print("Weaken time is " + ns.tFormat(weaken_time, true));
 	ns.print("We need to reduce the scurity level by " + weaken_amount);
 	ns.print("We need " + weaken_threads + " threads of weaken");
-	ns.print("Executing " + weaken_threads + " threads of " + hgw.weaken_script);
-	ns.exec(hgw.weaken_script, hgw.host, weaken_threads, hgw.target);
-	use_extra_threads(ns, hgw, hgw.max_threads - weaken_threads);
-	await verbose_sleep(ns, weaken_time + 1000);
-	reclaim_extra_threads(ns, hgw);
+	if(weaken_threads < hgw.max_threads) {
+		ns.print("Executing " + weaken_threads + " threads of " + hgw.weaken_script);
+		ns.exec(hgw.weaken_script, hgw.host, weaken_threads, hgw.target);
+		use_extra_threads(ns, hgw, hgw.max_threads - weaken_threads);
+		await verbose_sleep(ns, weaken_time + 1000);
+		reclaim_extra_threads(ns, hgw);
+	}
+	else {
+		ns.print("Executing " + hgw.max_threads + " threads of " + hgw.weaken_script);
+		ns.exec(hgw.weaken_script, hgw.host, hgw.max_threads, hgw.target);
+		await verbose_sleep(ns, weaken_time + 1000);
+	}
 	cur_security = ns.getServerSecurityLevel(hgw.target);
 	ns.print("After weakening, security level is now " + cur_security + "/" + hgw.min_sec);
 }
