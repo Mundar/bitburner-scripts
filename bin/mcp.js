@@ -104,7 +104,7 @@ function process_unrooted(s) {
 
 	if(process) {
 		var not_done = true;
-		while(not_done) {
+		while((not_done) && (0 < s.unrooted.length)) {
 			const candidate_server = s.unrooted.pop();
 			const server = s.ns.getServer(candidate_server);
 			if(root_server(s, candidate_server)) {
