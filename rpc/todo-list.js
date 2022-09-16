@@ -25,7 +25,6 @@ export async function main(ns) {
 	backdoorCheck(ns, "run4theh111z", "BitRunners");
 
 	// Manual Todo Tasks
-	ns.tprint("Finish basic idle code MCP.");
 	ns.tprint("Write analyze script.")
 	
 	rpc.exit();

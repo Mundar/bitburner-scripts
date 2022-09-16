@@ -17,11 +17,19 @@ export function align_left(s, w) {
 	return s + tab;
 }
 
-export function commafy(s) {
+export function commafy(s, d) {
 	var parts = String(s).split(".", 2);
 	var decimal = "";
 	if(2 == parts.length) {
 		decimal = "." + parts.pop();
+		if(undefined !== d) {
+			if(0 != d) {
+				decimal = decimal.substring(0, d+1);
+			}
+			else {
+				decimal = "";
+			}
+		}
 	}
 	var temp = Array.from(parts[0]);
 	var count = 0;
@@ -38,4 +46,24 @@ export function commafy(s) {
 		}
 	}
 	return commafied_string.reverse().join('') + decimal;
+}
+
+// Support reading '1PB', '512TB', '128GB', and parse into the value.
+export function textToGB(text) {
+	if(String(text).endsWith('B')) {
+		var parts = String(text).split('');
+		parts.pop(); // B
+		const mult_char = parts.pop();
+		var value = parseInt(parts.join(''));
+		if('P' == mult_char) {
+			value *= 1024*1024;
+		}
+		else if('T' == mult_char) {
+			value *= 1024;
+		}
+		return value;
+	}
+	else {
+		return parseInt(text);
+	}
 }

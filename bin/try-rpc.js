@@ -16,6 +16,7 @@ export async function main(ns) {
 
 	if(ns.fileExists(script, "home")) {
 		if(host != "home") {
+			await ns.scp("/include/formatting.js", host, "home");
 			await ns.scp("/include/rpc.js", host, "home");
 			await ns.scp(script, host, "home");
 		}

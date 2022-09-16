@@ -7,29 +7,33 @@ export async function main(ns) {
 	var hosts = new Map();
 
 	var remaining_hosts = ["home"];
-	hosts.set("home", serverData(ns, "home", []));
+	var home_data = serverData(ns, "home");
+	home_data.location = [];
+	hosts.set("home", home_data);
 	while(0 < remaining_hosts.length) {
 		const server = remaining_hosts.shift();
 		const me = hosts.get(server);
 		var location = me.location.concat([server]);
-		let new_scan = ns.scan(server);
+		var new_scan = ns.scan(server);
 		me.children = [];
 		while(0 < new_scan.length) {
 			const host = new_scan.shift();
 			if(!hosts.has(host)) {
 				remaining_hosts.push(host);
 				me.children.push(host);
-				const server_data = serverData(ns, host, location);
+				var server_data = serverData(ns, host);
+				server_data.location = location;
+				server_data.links = ns.scan(host);
 				hosts.set(host, server_data);
 			}
 		}
 	}
 	rpc.task.servers = Array.from(hosts.values());
 
-	rpc.exit();
+	await rpc.exit();
 }
 
-function serverData(ns, new_server, location) {
+export function serverData(ns, new_server) {
 	const server = ns.getServer(new_server);
 	return {
 		hostname: new_server,
@@ -41,8 +45,5 @@ function serverData(ns, new_server, location) {
 		purchased: server.purchasedByPlayer,
 		root_access: server.hasAdminRights,
 		backdoor: server.backdoorInstalled,
-		location: location,
-		files: ns.ls(new_server),
-		links: ns.scan(new_server),
 	}
 }

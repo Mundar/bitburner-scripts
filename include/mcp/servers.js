@@ -19,12 +19,12 @@ export class Servers {
 		this.debug = true;
 	}
 
-	staticMemory(ram, host) {
+	async staticMemory(ram, host) {
 		var server = this.getServerData(host);
-		server.reserveRam(0, ram);
+		await server.reserveRam(0, ram);
 	}
 
-	reserveMemory(ram, requested_threads, task) {
+	async reserveMemory(ram, requested_threads, task) {
 		this.debugMsg("reserveMemory: ram = " + ram
 			+ "; requested_threads = " + requested_threads
 			+ "; task = " + JSON.stringify(task));
@@ -45,7 +45,7 @@ export class Servers {
 			if(0 < threads) {
 				if(undefined === task.host)	{ task.host = host; }
 				const ram_used = ram * threads;
-				server.reserveRam(task.id, ram_used);
+				await server.reserveRam(task.id, ram_used);
 				task.reserved.total_ram += ram_used;
 				task.reserved.total_threads += threads;
 				task.reserved.hosts.push({ host: host, ram: ram_used, threads: threads });
@@ -151,23 +151,48 @@ export class Servers {
 
 	async runIdleTask(task, thread_limit) {
 		var remaining_threads = thread_limit;
+		if(undefined === task.script) {
+			if(undefined !== task.action) {
+				task.script = "/rpc/" + task.action + ".js";
+			}
+			else {
+				this.ns.print("ERROR: task has no action: task = " + JSON.stringify(task));
+			}
+		}
+		if(this.ns.fileExists(task.script, "home")) {
+			task.script_exists = true;
+		}
+		else {
+			this.ns.print("ERROR: Script \"" + task.script + "\" does not exist.");
+		}
+		var script_ram = this.ns.getScriptRam(task.script);
 		for(var host of this.useful_servers[Symbol.iterator]()) {
-			var server = this.getServerData(host);
-			var free_mem = server.freeRam();
+			const server = this.getServerData(host);
+			this.debugMsg("runIdleTask: host = " + host);
+			var free_mem = server.freeIdleRam();
 			if("home" == host) {
-				if(free_mem > 16) { free_mem -= 16; }
+				if(free_mem > 64) { free_mem -= 64; }
 				else { free_mem = 0; }
 			}
-			var threads = Math.floor(free_mem / ram);
-			if((undefined != remaining_threads) && (threads > remaining_threads)) {
+			var threads = Math.floor(free_mem / script_ram);
+			if((undefined !== remaining_threads) && (threads > remaining_threads)) {
 				threads = remaining_threads;
 			}
+			this.debugMsg("runIdleTask: threads = " + threads);
 			if(0 < threads) {
-				if(undefined === task.host)	{ task.host = host; }
+				task.host = host;
+				const pid = await this.mcp.directRunRPC(task, threads);
+				if(0 == pid) {
+					this.ns.print("Failed to start idle task \"" + task.action + "\" on " + host);
+				}
+				else {
+					server.idle_pids.set(pid, threads * script_ram);
+				}
 				if(undefined !== remaining_threads) { remaining_threads -= threads; }
 			}
-			if(0 == remaining_threads) { return true; }
+			if((undefined !== remaining_threads) && (0 == remaining_threads)) { return true; }
 		}
+		if(undefined === remaining_threads) { return true; }
 		return false;		
 	}
 
@@ -225,7 +250,7 @@ class Server {
 		if(init.links !== undefined) { this.links = init.links; }
 		else { this.links = []; }
 		this.reserved_memory = new Map();
-		this.idle_pids = [];
+		this.idle_pids = new Map();
 	}
 	updateCheck(cur, item, name) {
 		if(undefined === item) { return false; }
@@ -266,14 +291,24 @@ class Server {
 		for(const [key, ram] of this.reserved_memory.entries()) {
 			var used_ram = ram;
 			this.servers.debugMsg("key = " + JSON.stringify(key) + "; used_ram = " + used_ram)
-			if(used_ram == undefined) { used_ram = 0; }
+			if(used_ram === undefined) { used_ram = 0; }
 			this.servers.debugMsg("freeRam: used_ram = " + used_ram);
 			free_ram -= used_ram;
 			this.servers.debugMsg("freeRam: free_ram = " + free_ram);
 		}
 		return free_ram;
 	}
-	reserveRam(key, amount) {
+	freeIdleRam() {
+		var free_ram = this.freeRam();
+		for(const ram of this.idle_pids.values()) {
+			var used_ram = ram;
+			if(used_ram === undefined) { used_ram = 0; }
+			free_ram -= used_ram;
+		}
+		return free_ram;
+	}
+	async reserveRam(key, amount) {
+		await this.killIdleTasks();
 		this.servers.debugMsg("reserveRam: host = " + this.hostname + "; key = " + JSON.stringify(key) + "; amount = " + amount + "; entry = " + this.reserved_memory.get(key));
 		if(this.reserved_memory.has(key)) {
 			const cur_amount = this.reserved_memory.get(key);
@@ -290,5 +325,17 @@ class Server {
 			+ "; key = " + JSON.stringify(key)
 			+ "; entry = " + this.reserved_memory.get(key));
 		this.reserved_memory.delete(key);
+	}
+	async killIdleTasks() {
+		var running_pids = [];
+		for(var pid of this.idle_pids.keys()) {
+			this.servers.ns.kill(pid);
+			running_pids.push(pid);
+			this.idle_pids.delete(pid);
+		}
+		while(0 < running_pids) {
+			const pid = running_pids.pop();
+			while(this.servers.ns.isRunning(pid)) { await this.servers.ns.sleep(100); }
+		}
 	}
 }

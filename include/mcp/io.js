@@ -2,6 +2,7 @@
 export class IO {
 	constructor(port_handle) {
 		this.port = port_handle;
+		this.port.clear();
 		this.queue = [];
 	}
 

@@ -38,6 +38,10 @@ function list_servers(mcp, rest) {
 	for(const option of rest[Symbol.iterator]()) {
 		options.add(option);
 	}
+	if(options.has("targets")) {
+		options.add("rooted");
+		options.add("hackable");
+	}
 	for(const [hostname, data] of mcp.servers.server_data.entries()) {
 		if((options.has("rooted")) && (data.root_access == false)) { continue; }
 		if((options.has("unrooted")) && (data.root_access == true)) { continue; }
@@ -56,12 +60,17 @@ function list_servers(mcp, rest) {
 }
 
 function find_server(mcp, rest) {
-	const target = rest.shift();
+	var target = rest.shift();
 	if(target === undefined) {
 		mcp.ns.tprint("Common Targets:");
-		mcp.ns.tprint("  CSEC avmnite-02h I.I.I.I run4theh111z fulcrumassets");
+		mcp.ns.tprint("  1. CSEC  2. avmnite-02h  3. I.I.I.I  4. run4theh111z  5. fulcrumassets");
 		return;
 	}
+	else if("1" == target) { target = "CSEC"; }
+	else if("2" == target) { target = "avmnite-02h"; }
+	else if("3" == target) { target = "I.I.I.I"; }
+	else if("4" == target) { target = "run4theh111z"; }
+	else if("5" == target) { target = "fulcrumassets"; }
 	const server = mcp.servers.getServerData(target);
 	if(server !== undefined) {
 		var backtrack = [target];
@@ -79,6 +88,7 @@ function find_server(mcp, rest) {
 function display_status(mcp, rest) {
 	if(0 == rest.length) {
 		mcp.ns.tprint("  mcp         Display MCP status");
+		mcp.ns.tprint("  memory      Display memory status");
 		mcp.ns.tprint("  servers     Display servers status");
 		return;
 	}
@@ -87,6 +97,11 @@ function display_status(mcp, rest) {
 		options.add(rest.pop());
 	}
 	if(options.has("mcp")) {
+		mcp.ns.tprint("MCP:");
+		mcp.ns.tprint("  Running Tasks:");
+		for(var [id, task] of mcp.running_tasks_by_id.entries()) {
+			mcp.ns.tprint("    ID: " + id + "; task = " + JSON.stringify(task));
+		}
 	}
 	if(options.has("servers")) {
 		mcp.ns.tprint("Servers:");
@@ -94,6 +109,19 @@ function display_status(mcp, rest) {
 		mcp.ns.tprint("  Useless servers =  " + mcp.servers.useless_servers.length);
 		mcp.ns.tprint("  Unrooted servers = " + mcp.servers.unrooted_servers.length);
 		mcp.ns.tprint("  Unported servers = " + mcp.servers.unported_servers.length);
+	}
+	if(options.has("memory")) {
+		mcp.ns.tprint("Memory:");
+		mcp.ns.tprint("  Host                 Max RAM     Free RAM     Free Idle")
+		mcp.ns.tprint("  -------------------- ----------- ------------ ------------")
+		for(var host of mcp.servers.useful_servers[Symbol.iterator]()) {
+			const data = mcp.servers.getServerData(host);
+			mcp.ns.tprint("  " + fmt.align_left(host, 20)
+				+ fmt.align_right(fmt.commafy(data.max_ram, 0), 12)
+				+ fmt.align_right(fmt.commafy(data.freeRam(), 2), 13)
+				+ fmt.align_right(fmt.commafy(data.freeIdleRam(), 2), 13)
+			);
+		}
 	}
 }
 
