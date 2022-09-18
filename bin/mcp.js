@@ -1,5 +1,5 @@
 /** @param {NS} ns */
-import {IO} from "/include/mcp/io.js";
+import {IO} from "/include/io.js";
 import {Servers} from "/include/mcp/servers.js";
 import {setupUserHandlers, userMessageHandlers} from "/include/mcp/user.js"
 
@@ -191,7 +191,7 @@ class MCP {
 			await this.ns.scp("/include/formatting.js", task.host, "home");
 			await this.ns.scp("/include/rpc.js", task.host, "home");
 			await this.ns.scp("/include/server.js", task.host, "home");
-			await this.ns.scp("/include/mcp/io.js", task.host, "home");
+			await this.ns.scp("/include/io.js", task.host, "home");
 			await this.ns.scp(task.script, task.host, "home");
 		}
 		const pid = this.ns.exec(task.script, task.host, 1, JSON.stringify(task));
@@ -295,7 +295,7 @@ class MCP {
 				await this.ns.scp("/include/formatting.js", task.host, "home");
 				await this.ns.scp("/include/rpc.js", task.host, "home");
 				await this.ns.scp("/include/server.js", task.host, "home");
-				await this.ns.scp("/include/mcp/io.js", task.host, "home");
+				await this.ns.scp("/include/io.js", task.host, "home");
 				await this.ns.scp(script, task.host, "home");
 			}
 			return this.ns.exec(script, task.host, threads, JSON.stringify(task));
@@ -455,7 +455,7 @@ async function initRunScript(mcp, host, task, strip_message) {
 			await mcp.ns.scp("/include/formatting.js", host, "home");
 			await mcp.ns.scp("/include/rpc.js", host, "home");
 			await mcp.ns.scp("/include/server.js", host, "home");
-			await mcp.ns.scp("/include/mcp/io.js", host, "home");
+			await mcp.ns.scp("/include/io.js", host, "home");
 			await mcp.ns.scp(script, host, "home");
 		}
 		var pid = mcp.ns.exec(script, host, 1, JSON.stringify(task));

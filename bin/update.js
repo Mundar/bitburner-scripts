@@ -7,7 +7,7 @@ export async function main(ns) {
 	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/formatting.js", "/include/formatting.js");
 	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/rpc.js", "/include/rpc.js");
 	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/server.js", "/include/server.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/mcp/io.js", "/include/mcp/io.js");
+	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/io.js", "/include/io.js");
 	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/mcp/servers.js", "/include/mcp/servers.js");
 	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/mcp/user.js", "/include/mcp/user.js");
 

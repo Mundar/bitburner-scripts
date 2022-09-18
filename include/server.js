@@ -1,5 +1,5 @@
 /** @param {NS} ns */
-import {IO} from "/include/mcp/io.js";
+import {IO} from "/include/io.js";
 import * as fmt from "/include/formatting.js";
 
 // The purpose of this is to handle everything with a server program. It handles its reserved memory and executing subtasks.
@@ -88,7 +88,7 @@ export class Server {
 			await this.ns.scp("/include/formatting.js", task.host, "home");
 			await this.ns.scp("/include/rpc.js", task.host, "home");
 			await this.ns.scp("/include/server.js", task.host, "home");
-			await this.ns.scp("/include/mcp/io.js", task.host, "home");
+			await this.ns.scp("/include/io.js", task.host, "home");
 			await this.ns.scp(task.script, task.host, "home");
 		}
 		const pid = this.ns.exec(task.script, task.host, task.threads, JSON.stringify(task));
