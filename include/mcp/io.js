@@ -1,15 +1,17 @@
 /** @param {NS} ns */
 export class IO {
-	constructor(port_handle) {
-		this.port = port_handle;
-		this.port.clear();
+	constructor(ns, port) {
+		this.ns = ns;
+		this.port = port;
+		this.port_handle = ns.getPortHandle(port);
+		this.port_handle.clear();
 		this.queue = [];
 	}
 
 	checkPort() {
 		var count = 0;
-		while(!this.port.empty()) {
-			this.queue.push(this.port.read());
+		while(!this.port_handle.empty()) {
+			this.queue.push(this.port_handle.read());
 			count++;
 		}
 		return count;
@@ -22,5 +24,9 @@ export class IO {
 
 	getMessage() {
 		return this.queue.shift();
+	}
+
+	async waitForMessage() {
+		while(!messageAvailable()) {  }
 	}
 }

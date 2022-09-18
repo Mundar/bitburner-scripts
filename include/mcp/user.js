@@ -3,6 +3,7 @@ import * as fmt from "/include/formatting.js";
 
 export function setupUserHandlers() {
 	var handlers = new Map();
+	handlers.set("analyze", function(mcp, rest) { analyze_server(mcp, rest); } );
 	handlers.set("buy", function(mcp, rest) { buy_servers(mcp, rest); } );
 	handlers.set("find", function(mcp, rest) { find_server(mcp, rest); } );
 	handlers.set("help", function(mcp, rest) { help_handler(mcp, rest); } );
@@ -10,12 +11,18 @@ export function setupUserHandlers() {
 	handlers.set("status", function(mcp, rest) { display_status(mcp, rest); } );
 	handlers.set("todo", function(mcp, rest) { display_todo(mcp, rest); } );
 	handlers.set("update", function(mcp, rest) { manual_update(mcp, rest); } );
+	handlers.set("weaken", function(mcp, rest) { weaken_threads(mcp, rest); } );
 	return handlers;
+}
+
+export function userMessageHandlers(handlers) {
+	handlers.set("weaken-threads", async function(mcp, task) { await weaken_server(mcp, task); } );
 }
 
 function help_handler(mcp, rest) {
 	const command = rest.shift();
 	if(undefined === command) {
+		mcp.ns.tprint("  analyze     Analyze servers for profitability");
 		mcp.ns.tprint("  buy         Access the purchase server interface");
 		mcp.ns.tprint("  find        Find path to server");
 		mcp.ns.tprint("  help        Display this help text");
@@ -55,7 +62,7 @@ function list_servers(mcp, rest) {
 			+ fmt.align_right(data.level, 5)
 			+ fmt.align_right(data.ports, 2)
 			+ fmt.align_right(data.max_ram, 8) + "GB  "
-			+ fmt.align_right("$" + fmt.commafy(data.max_money), 20));
+			+ fmt.align_right("$" + fmt.commafy(data.max_money, 0), 20));
 	}
 }
 
@@ -163,4 +170,47 @@ function buy_servers(mcp, rest) {
 
 function display_todo(mcp, rest) {
 	mcp.tasks.push(mcp.createTask("Display todo list", "todo-list"));
+}
+
+async function weaken_threads(mcp, rest) {
+	var target = rest.shift();
+	if(undefined === target) {
+		mcp.ns.tprint("USAGE: mcp weaken [target]");
+		mcp.ns.exit();
+	}
+	var task = mcp.createTask("Weaken " + target, "weaken-threads");
+	task.target = target;
+	mcp.tasks.push(task);
+}
+
+async function weaken_server(mcp, threads_task) {
+	if(0 == threads_task.weaken_threads) { return; }
+	const target = threads_task.target;
+	var task = mcp.createTask("Weaken " + target, "weaken-server");
+	task.target = target;
+	task.sec_per_weaken = threads_task.sec_per_weaken;
+	task.min_security = threads_task.min_security;
+	var weaken_server_ram = mcp.ns.getScriptRam("/rpc/weaken-server.js", "home");
+	mcp.debugMsg("weaken_server_ram = " + weaken_server_ram);
+	await mcp.servers.reserveMemory(weaken_server_ram, 1, task);
+	var weaken_ram = mcp.ns.getScriptRam("/rpc/weaken.js", "home");
+	mcp.debugMsg("weaken_ram = " + weaken_ram);
+	await mcp.servers.reserveMemory(weaken_ram, threads_task.weaken_threads, task);
+	mcp.debugMsg("Weaken_server task = " + JSON.stringify(task))
+	mcp.tasks.push(task);
+}
+
+function analyze_server(mcp, rest) {
+	var target = rest.shift();
+	var task = {
+		label: "Display todo list",
+		action: "todo-list",
+	};
+	if(undefined !== target) {
+		task.target = target;
+	}
+	else {
+		task.targets = mcp.servers.hackable_servers;
+	}
+	mcp.tasks.push(mcp.createTask(task));
 }

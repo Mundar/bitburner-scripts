@@ -11,9 +11,17 @@ export class RPC {
 			this.ports = [].concat(this.task.ports);
 		}
 	}
+
+	async delay() {
+		if((undefined !== this.task.delay) && (0 < this.task.delay)) {
+			await this.ns.sleep(this.task.delay);
+		}
+	}
+
 	async exit() {
 		await this.send(this.task);
 	}
+
 	async send(message) {
 		for(var port of this.ports[Symbol.iterator]()) {
 			while(!await this.ns.tryWritePort(port, JSON.stringify(message))) {

@@ -1,15 +1,16 @@
 /** @param {NS} ns */
 import {IO} from "/include/mcp/io.js";
 import {Servers} from "/include/mcp/servers.js";
-import {setupUserHandlers} from "/include/mcp/user.js"
+import {setupUserHandlers, userMessageHandlers} from "/include/mcp/user.js"
 
 export async function main(ns) {
 	ns.disableLog("sleep");
 
 	let mcp = new MCP(ns);
 
-	await initRunScript(ns, "home", {host:"home", action: "root-server", target: "foodnstuff"});
-	await initRunScript(ns, "foodnstuff", {host:"foodnstuff", action:"get-all-servers"});
+	await initRunScript(mcp, "home", {host:"home", action: "kill-all", useful_servers: ["home", "foodnstuff"]})
+	await initRunScript(mcp, "home", {host:"home", action: "root-server", target: "foodnstuff"});
+	await initRunScript(mcp, "foodnstuff", {host:"foodnstuff", action:"get-all-servers"});
 
 	await mcp.commandLoop();
 }
@@ -17,7 +18,7 @@ export async function main(ns) {
 class MCP {
 	constructor(ns) {
 		this.ns = ns;
-		this.io = new IO(ns.getPortHandle(20));
+		this.io = new IO(ns, 20);
 		this.servers = new Servers(ns, this);
 		this.high_priority = startingHighPriorityTasks();
 		this.tasks = startingTasks();
@@ -37,7 +38,9 @@ class MCP {
 		this.running_tasks_by_pid = new Map();
 		this.running_special_tasks = new Map();
 		this.needed_port_openers = initializeNeededPortOpeners();
+		this.reserved_ram = 32;		// The amount of RAM reserved on home.
 		this.idle_action = "hack-exp";
+		this.hack_consts = {};
 	}
 
 	async commandLoop() {
@@ -187,6 +190,8 @@ class MCP {
 		if(task.host != "home") {
 			await this.ns.scp("/include/formatting.js", task.host, "home");
 			await this.ns.scp("/include/rpc.js", task.host, "home");
+			await this.ns.scp("/include/server.js", task.host, "home");
+			await this.ns.scp("/include/mcp/io.js", task.host, "home");
 			await this.ns.scp(task.script, task.host, "home");
 		}
 		const pid = this.ns.exec(task.script, task.host, 1, JSON.stringify(task));
@@ -247,14 +252,14 @@ class MCP {
 		}
 	}
 
-	handleUserRequest(message) {
+	async handleUserRequest(message) {
 		if(message.command !== undefined) {
 			const command = message.command.shift();
 			const rest = message.command;
 			if(this.user_handlers.has(command)) {
 				const user_handler = this.user_handlers.get(command);
 				if(user_handler !== undefined) {
-					user_handler(this, rest);
+					await user_handler(this, rest);
 					return;
 				}
 			}
@@ -289,6 +294,8 @@ class MCP {
 			if("home" != task.host) {
 				await this.ns.scp("/include/formatting.js", task.host, "home");
 				await this.ns.scp("/include/rpc.js", task.host, "home");
+				await this.ns.scp("/include/server.js", task.host, "home");
+				await this.ns.scp("/include/mcp/io.js", task.host, "home");
 				await this.ns.scp(script, task.host, "home");
 			}
 			return this.ns.exec(script, task.host, threads, JSON.stringify(task));
@@ -317,20 +324,18 @@ function initialWaitingTasks() {
 		label: "Kill all tasks on startup",
 		mcp_function: function(mcp, task) { add_kill_all_task(mcp); },
 	});
-	tasks.set("kill-all", {
-		label: "Start rooting servers",
-		mcp_function: function(mcp, task) { root_next_server(mcp); },
-	});
 	return tasks;
 }
 
 function setupMessageHandlers() {
 	var handlers = new Map();
 	handlers.set("get-all-servers", async function(mcp, task) { await update_servers(mcp, task); } );
-	handlers.set("server-details", async function(mcp, task) { update_server(mcp, task); } );
-	handlers.set("root-server", async function(mcp, task) { handle_root_server(mcp, task); });
-	handlers.set("purchase-servers", async function(mcp, task) { handle_purchase_servers(mcp, task); });
-	handlers.set("user", async function(mcp, p) { mcp.handleUserRequest(p); });
+	handlers.set("hack-conststants", function(mcp, task) { define_hack_consts(mcp, task); });
+	handlers.set("purchase-servers", function(mcp, task) { handle_purchase_servers(mcp, task); });
+	handlers.set("root-server", function(mcp, task) { handle_root_server(mcp, task); });
+	handlers.set("server-details", function(mcp, task) { update_server(mcp, task); } );
+	handlers.set("user", async function(mcp, p) { await mcp.handleUserRequest(p); });
+	userMessageHandlers(handlers);
 	return handlers;
 }
 
@@ -372,6 +377,13 @@ function handle_root_server(mcp, result) {
 	root_next_server(mcp);
 }
 
+function define_hack_consts(mcp, result) {
+	if(result.hack_consts !== undefined) {
+		mcp.debugMsg("Defining MCP hack consts to " + JSON.stringify(result.hack_consts));
+		mcp.hack_consts = result.hack_consts;
+	}
+}
+
 function handle_purchase_servers(mcp, result) {
 	mcp.high_priority.push(mcp.createTask({
 		label: "Update server list after server purchase",
@@ -390,6 +402,10 @@ function root_next_server(mcp) {
 }
 
 function add_kill_all_task(mcp) {
+	mcp.waiting_tasks.set("kill-all", {
+		label: "Start rooting servers",
+		mcp_function: function(mcp, task) { root_next_server(mcp); },
+	});
 	mcp.high_priority.push(mcp.createTask({
 		label: "Kill all tasks",
 		action: "kill-all",
@@ -432,21 +448,23 @@ function initializeNeededPortOpeners() {
 	return out;
 }
 
-async function initRunScript(ns, host, task) {
+async function initRunScript(mcp, host, task, strip_message) {
 	if(task.action !== undefined) {
 		var script = "/rpc/" + task.action + ".js";
 		if("home" != host) {
-			await ns.scp("/include/formatting.js", host, "home");
-			await ns.scp("/include/rpc.js", host, "home");
-			await ns.scp(script, host, "home");
+			await mcp.ns.scp("/include/formatting.js", host, "home");
+			await mcp.ns.scp("/include/rpc.js", host, "home");
+			await mcp.ns.scp("/include/server.js", host, "home");
+			await mcp.ns.scp("/include/mcp/io.js", host, "home");
+			await mcp.ns.scp(script, host, "home");
 		}
-		var pid = ns.exec(script, host, 1, JSON.stringify(task));
+		var pid = mcp.ns.exec(script, host, 1, JSON.stringify(task));
 		if(0 == pid) {
-			ns.tprint("Cannot run script " + script + " on " + host);
-			ns.exit();
+			mcp.ns.tprint("Cannot run script " + script + " on " + host);
+			mcp.ns.exit();
 		}
-		while(ns.isRunning(pid)) {
-			await ns.sleep(200);
+		while(mcp.ns.isRunning(pid)) {
+			await mcp.ns.sleep(200);
 		}
 	}
 }

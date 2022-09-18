@@ -7,6 +7,7 @@ export class Servers {
 		this.home_server = new Server(this, "home", {})
 		this.useful_servers = [];
 		this.useless_servers = [];
+		this.hackable_servers = [];
 		this.purchased_servers = [];
 		this.rooted_servers = [];
 		this.rooting_server = [];
@@ -40,6 +41,14 @@ export class Servers {
 		for(var host of this.useful_servers[Symbol.iterator]()) {
 			var server = this.getServerData(host);
 			var free_mem = server.freeRam();
+			if(("home" == host) && (1 != requested_threads)) {
+				if(free_mem > this.mcp.reserved_ram) {
+					free_mem -= this.mcp.reserved_ram;
+				}
+				else {
+					free_mem = 0;
+				}
+			}
 			var threads = Math.floor(free_mem / ram);
 			if(threads > remaining_threads) { threads = remaining_threads; }
 			if(0 < threads) {
@@ -70,6 +79,9 @@ export class Servers {
 				}
 				else {
 					this.useless_servers.push(hostname);
+				}
+				if(0 < server.max_money) {
+					this.hackable_servers.push(hostname);
 				}
 			}
 			else if((1 < server.level) || (0 == server.ports)) {
@@ -104,6 +116,9 @@ export class Servers {
 			}
 			else {
 				this.useless_servers.push(hostname);
+			}
+			if(0 < server.max_money) {
+				this.hackable_servers.push(hostname);
 			}
 		}
 	}
@@ -171,7 +186,7 @@ export class Servers {
 			this.debugMsg("runIdleTask: host = " + host);
 			var free_mem = server.freeIdleRam();
 			if("home" == host) {
-				if(free_mem > 64) { free_mem -= 64; }
+				if(free_mem > this.mcp.reserved_ram) { free_mem -= this.mcp.reserved_ram; }
 				else { free_mem = 0; }
 			}
 			var threads = Math.floor(free_mem / script_ram);
