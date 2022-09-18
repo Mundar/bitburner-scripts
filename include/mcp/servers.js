@@ -4,7 +4,6 @@ export class Servers {
 		this.ns = ns;
 		this.mcp = mcp;
 		this.server_data = new Map();
-		this.home_server = new Server(this, "home", {})
 		this.useful_servers = [];
 		this.useless_servers = [];
 		this.hackable_servers = [];
@@ -71,7 +70,7 @@ export class Servers {
 			server.update(details)
 		}
 		else {
-			let server = new Server(this, hostname, details);
+			let server = new ServerData(this, hostname, details);
 			this.server_data.set(hostname, server);
 			if(server.root_access) {
 				if(0 < server.max_ram) {
@@ -211,26 +210,9 @@ export class Servers {
 		return false;		
 	}
 
-	iterateHosts(func) {
-		var output;
-		for(const [hostname, data] of this.server_data.entries()) {
-			if(!func(hostname, data, output)) {
-				return output;
-			}
-		}
-		func("home", this.home_server, output);
-		return output;
-	}
-
-	chooseHost2(script_ram) {
-		var result = this.iterateHosts(function(h, d, o) { return chooseHostFunction(h, d, o); }); 
-		if(result == undefined) { result = ""; }
-		return result;
-	}
-
 	debugMsg(string) {
 		if(this.debug) {
-			this.ns.print("DEBUG: " + string);
+			this.ns.print("DEBUG: Servers: " + string);
 		}
 	}
 }
@@ -243,7 +225,7 @@ function chooseHostFunction(servers, host, info, output) {
 	return true;	
 }
 
-class Server {
+class ServerData {
 	constructor(servers, hostname, init) {
 		this.servers = servers;
 		this.hostname = hostname;
@@ -266,6 +248,7 @@ class Server {
 		else { this.links = []; }
 		this.reserved_memory = new Map();
 		this.idle_pids = new Map();
+		this.debug = false;
 	}
 	updateCheck(cur, item, name) {
 		if(undefined === item) { return false; }
@@ -299,17 +282,17 @@ class Server {
 		if(update.links !== undefined) { this.links = update.links; }
 	}
 	freeRam() {
-		this.servers.debugMsg("freeRam: this.max_ram = " + this.max_ram);
+		this.debugMsg("freeRam: this.max_ram = " + this.max_ram);
 		if(this.max_ram === undefined) { return 0; }
 		var free_ram = this.max_ram;
-		this.servers.debugMsg("freeRam: free_ram = " + free_ram);
+		this.debugMsg("freeRam: free_ram = " + free_ram);
 		for(const [key, ram] of this.reserved_memory.entries()) {
 			var used_ram = ram;
-			this.servers.debugMsg("key = " + JSON.stringify(key) + "; used_ram = " + used_ram)
+			this.debugMsg("key = " + JSON.stringify(key) + "; used_ram = " + used_ram)
 			if(used_ram === undefined) { used_ram = 0; }
-			this.servers.debugMsg("freeRam: used_ram = " + used_ram);
+			this.debugMsg("freeRam: used_ram = " + used_ram);
 			free_ram -= used_ram;
-			this.servers.debugMsg("freeRam: free_ram = " + free_ram);
+			this.debugMsg("freeRam: free_ram = " + free_ram);
 		}
 		return free_ram;
 	}
@@ -324,7 +307,7 @@ class Server {
 	}
 	async reserveRam(key, amount) {
 		await this.killIdleTasks();
-		this.servers.debugMsg("reserveRam: host = " + this.hostname + "; key = " + JSON.stringify(key) + "; amount = " + amount + "; entry = " + this.reserved_memory.get(key));
+		this.debugMsg("reserveRam: host = " + this.hostname + "; key = " + JSON.stringify(key) + "; amount = " + amount + "; entry = " + this.reserved_memory.get(key));
 		if(this.reserved_memory.has(key)) {
 			const cur_amount = this.reserved_memory.get(key);
 			this.reserved_memory.set(key, cur_amount + amount);
@@ -334,9 +317,9 @@ class Server {
 		}
 	}
 	releaseRam(key) {
-		this.servers.debugMsg("releaseRam: entries = "
+		this.debugMsg("releaseRam: entries = "
 			+ JSON.stringify(Array.from(this.reserved_memory.entries())));
-		this.servers.debugMsg("releaseRam: host = " + this.hostname
+		this.debugMsg("releaseRam: host = " + this.hostname
 			+ "; key = " + JSON.stringify(key)
 			+ "; entry = " + this.reserved_memory.get(key));
 		this.reserved_memory.delete(key);
@@ -351,6 +334,12 @@ class Server {
 		while(0 < running_pids) {
 			const pid = running_pids.pop();
 			while(this.servers.ns.isRunning(pid)) { await this.servers.ns.sleep(100); }
+		}
+	}
+
+	debugMsg(string) {
+		if(this.debug) {
+			this.ns.print("DEBUG: ServerData: " + string);
 		}
 	}
 }

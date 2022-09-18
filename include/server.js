@@ -1,5 +1,6 @@
 /** @param {NS} ns */
-import {IO} from "/include/mcp/io.js"
+import {IO} from "/include/mcp/io.js";
+import * as fmt from "/include/formatting.js";
 
 // The purpose of this is to handle everything with a server program. It handles its reserved memory and executing subtasks.
 //
@@ -43,7 +44,7 @@ export class Server {
 		this.task_count = 0;
 		this.tasks_by_id = new Map();
 		this.tasks_by_pid = new Map();
-		this.debug = false;
+		this.debug = true;
 	}
 	addTasks(task, threads) {
 		if(undefined === task.port) {
@@ -134,16 +135,18 @@ export class Server {
 	}
 	debugMsg(string) {
 		if(this.debug) {
-			this.ns.print("DEBUG: " + string);
+			this.ns.print("DEBUG: Server: " + string);
 		}
 	}
 }
 
 class MemoryPool {
 	constructor(ns, task) {
+		this.debug_level = 1;
 		this.ns = ns;
 		this.hosts = new Map();
 		for(var rec of task.reserved.hosts[Symbol.iterator]()) {
+			this.debug(2, "Adding " + rec.ram + "GB of RAM on server " + rec.host);
 			if(this.hosts.has(rec.host)) {
 				var bucket = this.hosts.get(rec.host);
 				bucket.max_ram += rec.ram;
@@ -157,36 +160,50 @@ class MemoryPool {
 		this.tasks_by_id = new Map();
 		this.tasks_by_pid = new Map();
 		this.uniqueID = 0;
-		this.debug = false;
+		this.debug(1, "Memory given to this server:");
+		for(var [host, bucket] of this.hosts.entries()) {
+			this.debug(1, "  " + fmt.align_left(host, 18)
+				+ fmt.align_right(bucket.max_ram) + "GB"
+			);
+		}
 	}
 
 	getTaskId() {
 		this.uniqueID += 1;
+		this.debug(3, "getTaskId returning " + this.uniqueId);
 		return this.uniqueID;
 	}
 
 	reserveMemory(task, requested_threads, task_queue) {
-		this.debugMsg("reserveMemory: queue length = " + task_queue.length
+		this.debug(2, "reserveMemory: queue length = " + task_queue.length
 			+ "; requested_threads = " + requested_threads
 			+ "; task = " + JSON.stringify(task));
 		if(this.memory_uninitialized) {
 			const script = this.ns.getScriptName();
 			const script_ram = this.ns.getScriptRam(script);
 			var memory = this.hosts.get(this.ns.getHostname());
+			this.debug(1, "Performing one-time memory allocation for " + script + " of "
+				+ script_ram + "GB of RAM from host " + memory.hostname);
 			memory.reserveRam(0, script_ram);
 		}
 		var remaining_threads = requested_threads;
 		if(undefined === task.script) {
 			task.script = "/rpc/" + task.action + ".js";
 		}
-		if(!this.ns.fileExists(task.script, "home")) { return 0; }
+		if(!this.ns.fileExists(task.script, "home")) {
+			this.ns.print("ERROR: Script " + task.script + " doesn't exist on home");
+			return 0;
+		}
 		const ram = this.ns.getScriptRam(task.script, "home");
-		this.debugMsg("reserveMemory: task = " + JSON.stringify(task));
+		this.debug(2, "reserveMemory: task = " + JSON.stringify(task));
 		var total_threads = 0;
 		for(var [host, server] of this.hosts.entries()) {
 			var free_mem = server.freeRam();
-			var threads = Math.floor(free_mem / ram);
+			this.debug(3, "free_mem = " + free_mem);
+			var threads = Math.floor((free_mem + 0.001) / ram);	// Sometimes rounding of floats is weird.
+			this.debug(3, "threads = " + threads);
 			if(threads > remaining_threads) { threads = remaining_threads; }
+			this.debug(2, "Assigning " + threads + " threads to host " + host + " for a script needing " + ram + "GB of RAM")
 			if(0 < threads) {
 				var new_task = JSON.parse(JSON.stringify(task));
 				new_task.id = this.getTaskId();
@@ -195,34 +212,33 @@ class MemoryPool {
 				const ram_used = ram * threads;
 				new_task.ram_used = ram_used;
 				server.reserveRam(task.id, ram_used);
+				this.debug(3, "Queueing task " + JSON.stringify(new_task));
 				task_queue.push(new_task);
 				remaining_threads -= threads;
 				total_threads += threads;
 			}
-			if(0 == remaining_threads) { return total_threads; }
+			if(0 == remaining_threads) { break; }
 		}
+		this.debug(1, "Returning " + total_threads + " from reserveMemory");
 		return total_threads;
 	}
 
 	finishedTask(task) {
+		this.debug(1, "Performing finishedTask on task " + JSON.stringify(task));
 		if(task.id !== undefined) {
 			const saved_task = this.tasks_by_id(task.id);
 			this.tasks_by_id.delete(task.id);
 			for(var pid of saved_task.pids[Symbol.iterator]()) {
 				this.tasks_by_pid.delete(pid);
 			}
-		}
-		if(task.reserved !== undefined) {
-			for(var host of task.reserved.hosts[Symbol.iterator]()) {
-				this.debugMsg("Server.finishedTask: reserved = " + JSON.stringify(host));
-				this.hosts.get(host.host).releaseRam(task.id);
-			}
+			this.debug(2, "Releasing memory assigned to task #" + task.id + " from host " + task.host);
+			this.hosts.get(task.host).releaseRam(task.id);
 		}
 	}
 
-	debugMsg(string) {
-		if(this.debug) {
-			this.ns.print("DEBUG: " + string);
+	debug(level, string) {
+		if(level <= this.debug_level) {
+			this.ns.print("DEBUG: MemoryPool: " + string);
 		}
 	}
 }
@@ -233,8 +249,8 @@ class MemoryBucket {
 		this.pool = pool;
 		this.max_ram = ram;
 		this.reserved_memory = new Map();
+		this.debug = false;
 	}
-	debugMsg(s) { this.pool.debugMsg(s); }
 	freeRam() {
 		this.debugMsg("freeRam: this.max_ram = " + this.max_ram);
 		if(this.max_ram === undefined) { return 0; }
@@ -267,5 +283,11 @@ class MemoryBucket {
 			+ "; key = " + JSON.stringify(key)
 			+ "; entry = " + this.reserved_memory.get(key));
 		this.reserved_memory.delete(key);
+	}
+
+	debugMsg(string) {
+		if(this.debug) {
+			this.ns.print("DEBUG: MemoryBucket: " + string);
+		}
 	}
 }

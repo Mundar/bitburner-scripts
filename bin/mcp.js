@@ -305,7 +305,7 @@ class MCP {
 
 	debugMsg(string) {
 		if(this.debug) {
-			this.ns.print("DEBUG: " + string);
+			this.ns.print("DEBUG: MCP: " + string);
 		}
 	}
 }
