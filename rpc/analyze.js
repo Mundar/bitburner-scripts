@@ -127,7 +127,7 @@ function get_hgw_bestimate(ns, host, threads) {
 	var min = 0.0;
 	var max = 0.9;
 	var bestimate = {};
-	
+
 	for(var max_loops = 20; 0 < max_loops; --max_loops) {
 		const cur = (min + max) / 2.0;
 		const estimate = hack_grow_weaken_estimate(ns, host, cur);
