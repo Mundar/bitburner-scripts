@@ -330,7 +330,7 @@ function initialWaitingTasks() {
 function setupMessageHandlers() {
 	var handlers = new Map();
 	handlers.set("get-all-servers", async function(mcp, task) { await update_servers(mcp, task); } );
-	handlers.set("hack-conststants", function(mcp, task) { define_hack_consts(mcp, task); });
+	handlers.set("hack-constants", function(mcp, task) { define_hack_consts(mcp, task); });
 	handlers.set("purchase-servers", function(mcp, task) { handle_purchase_servers(mcp, task); });
 	handlers.set("root-server", function(mcp, task) { handle_root_server(mcp, task); });
 	handlers.set("server-details", function(mcp, task) { update_server(mcp, task); } );
@@ -404,7 +404,10 @@ function root_next_server(mcp) {
 function add_kill_all_task(mcp) {
 	mcp.waiting_tasks.set("kill-all", {
 		label: "Start rooting servers",
-		mcp_function: function(mcp, task) { root_next_server(mcp); },
+		mcp_function: function(mcp, task) {
+			mcp.tasks.push(mcp.createTask("Load the hack constants", "hack-constants"));
+			root_next_server(mcp);
+		},
 	});
 	mcp.high_priority.push(mcp.createTask({
 		label: "Kill all tasks",

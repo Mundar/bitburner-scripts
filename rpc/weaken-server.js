@@ -36,7 +36,6 @@ export async function main(ns) {
 		var total = 0;
 		while(cp.hasMessage()) {
 			const resp = JSON.parse(cp.getMessage());
-			ns.print("resp = " + JSON.stringify(resp));
 			total += resp.weakened;
 		}
 		ns.print("Weaken returned a total of " + total);

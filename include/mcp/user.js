@@ -203,8 +203,9 @@ async function weaken_server(mcp, threads_task) {
 function analyze_server(mcp, rest) {
 	var target = rest.shift();
 	var task = {
-		label: "Display todo list",
-		action: "todo-list",
+		label: "Analyze servers",
+		action: "analyze",
+		hack_consts: mcp.hack_consts,
 	};
 	if(undefined !== target) {
 		task.target = target;

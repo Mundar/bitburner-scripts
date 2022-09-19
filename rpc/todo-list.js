@@ -25,7 +25,10 @@ export async function main(ns) {
 	backdoorCheck(ns, "run4theh111z", "BitRunners");
 
 	// Manual Todo Tasks
-	ns.tprint("Write analyze script.")
+	ns.tprint("")
+	ns.tprint("Write grow server");
+	ns.tprint("Write hack server");
+	ns.tprint("Write coding contract scripts");
 	
 	rpc.exit();
 }

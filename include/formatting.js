@@ -17,6 +17,23 @@ export function align_left(s, w) {
 	return s + tab;
 }
 
+export function notation(value) {
+	const letters = [" ", "k", "m", "b", "t", "q", "Q", "s", "S", "o", "n", "d"];
+	var index = 0;
+	while(value >= 1000) {
+		if(index + 1 >= letters.length) { break; }
+		index += 1;
+		value /= 1000;
+	}
+	var parts = String(value).split(".", 2);
+	if(1 == parts.length) { parts.push("000"); }
+	while(parts[1].length < 3) {
+		parts[1] += "0";
+	}
+	parts[1] = parts[1].substring(0,3);
+	return parts.join('.') + letters[index];
+}
+
 export function commafy(s, d) {
 	var parts = String(s).split(".", 2);
 	var decimal = "";
@@ -46,6 +63,43 @@ export function commafy(s, d) {
 		}
 	}
 	return commafied_string.reverse().join('') + decimal;
+}
+
+export function decimal(s, d) {
+	var parts = String(s).split(".", 2);
+	var decimal = "";
+	if(2 == parts.length) {
+		decimal = "." + parts.pop();
+		if(undefined !== d) {
+			if(0 != d) {
+				decimal = decimal.substring(0, d+1);
+			}
+			else {
+				decimal = "";
+			}
+		}
+	}
+	return parts[0] + decimal;
+}
+
+export function time(ms) {
+	const time = Math.round(ms);
+	const millis = time % 1000;
+	const seconds = Math.floor(time / 1000) % 60;
+	if(60000 > time) { return seconds + "." + leading_zeros(millis, 3); }
+	const minutes = Math.floor(time / 60000) % 60;
+	if(3600000 > time) { return minutes + ":" + leading_zeros(seconds, 2) + "." + leading_zeros(millis, 3); }
+	const hours = Math.floor(time / 3600000);
+	return hours + ":" + leading_zeros(minutes, 2) + ":" + leading_zeros(seconds, 2) + "." + leading_zeros(millis, 3);
+}
+
+export function leading_zeros(s, w) {
+	const spaces = w - String(s).length;
+	var tab = "";
+	for(var i = 0; spaces > i; ++i) {
+		tab += "0";
+	}
+	return tab + s;
 }
 
 // Support reading '1PB', '512TB', '128GB', and parse into the value.

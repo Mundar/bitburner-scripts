@@ -106,6 +106,7 @@ export class Server {
 			this.tasks_by_pid.delete(record.pid);
 			this.task_count -= 1;
 		}
+		this.pool.finishedTask(task);
 	}
 	hasMessage() {
 		return (0 < this.message_queue.length);
@@ -142,7 +143,7 @@ export class Server {
 
 class MemoryPool {
 	constructor(ns, task) {
-		this.debug_level = 1;
+		this.debug_level = 3;
 		this.ns = ns;
 		this.hosts = new Map();
 		for(var rec of task.reserved.hosts[Symbol.iterator]()) {
@@ -157,8 +158,6 @@ class MemoryPool {
 		}
 		// Permanently reserve memory used by this script.
 		this.memory_uninitialized = true;
-		this.tasks_by_id = new Map();
-		this.tasks_by_pid = new Map();
 		this.uniqueID = 0;
 		this.debug(1, "Memory given to this server:");
 		for(var [host, bucket] of this.hosts.entries()) {
@@ -170,7 +169,7 @@ class MemoryPool {
 
 	getTaskId() {
 		this.uniqueID += 1;
-		this.debug(3, "getTaskId returning " + this.uniqueId);
+		this.debug(3, "getTaskId returning " + this.uniqueID);
 		return this.uniqueID;
 	}
 
@@ -185,6 +184,7 @@ class MemoryPool {
 			this.debug(1, "Performing one-time memory allocation for " + script + " of "
 				+ script_ram + "GB of RAM from host " + memory.hostname);
 			memory.reserveRam(0, script_ram);
+			this.memory_uninitialized = false;
 		}
 		var remaining_threads = requested_threads;
 		if(undefined === task.script) {
@@ -211,7 +211,7 @@ class MemoryPool {
 				new_task.threads = threads;
 				const ram_used = ram * threads;
 				new_task.ram_used = ram_used;
-				server.reserveRam(task.id, ram_used);
+				server.reserveRam(new_task.id, ram_used);
 				this.debug(3, "Queueing task " + JSON.stringify(new_task));
 				task_queue.push(new_task);
 				remaining_threads -= threads;
@@ -226,13 +226,9 @@ class MemoryPool {
 	finishedTask(task) {
 		this.debug(1, "Performing finishedTask on task " + JSON.stringify(task));
 		if(task.id !== undefined) {
-			const saved_task = this.tasks_by_id(task.id);
-			this.tasks_by_id.delete(task.id);
-			for(var pid of saved_task.pids[Symbol.iterator]()) {
-				this.tasks_by_pid.delete(pid);
-			}
 			this.debug(2, "Releasing memory assigned to task #" + task.id + " from host " + task.host);
-			this.hosts.get(task.host).releaseRam(task.id);
+			var host = this.hosts.get(task.host);
+			host.releaseRam(task.id);
 		}
 	}
 
@@ -245,29 +241,30 @@ class MemoryPool {
 
 class MemoryBucket {
 	constructor(ram, hostname, pool) {
+		this.debug_level = 3;
 		this.hostname = hostname;
 		this.pool = pool;
 		this.max_ram = ram;
 		this.reserved_memory = new Map();
-		this.debug = false;
 	}
 	freeRam() {
-		this.debugMsg("freeRam: this.max_ram = " + this.max_ram);
+		this.debug(3, "freeRam: this.max_ram = " + this.max_ram);
 		if(this.max_ram === undefined) { return 0; }
 		var free_ram = this.max_ram;
-		this.debugMsg("freeRam: free_ram = " + free_ram);
+		this.debug(3, "freeRam: free_ram = " + free_ram);
 		for(const [key, ram] of this.reserved_memory.entries()) {
 			var used_ram = ram;
-			this.debugMsg("key = " + JSON.stringify(key) + "; used_ram = " + used_ram)
+			this.debug(3, "key = " + JSON.stringify(key) + "; used_ram = " + used_ram)
 			if(used_ram === undefined) { used_ram = 0; }
-			this.debugMsg("freeRam: used_ram = " + used_ram);
+			this.debug(3, "freeRam: used_ram = " + used_ram);
 			free_ram -= used_ram;
-			this.debugMsg("freeRam: free_ram = " + free_ram);
+			this.debug(3, "freeRam: free_ram = " + free_ram);
 		}
+		this.debug(1, "freeRam returning " + free_ram);
 		return free_ram;
 	}
 	reserveRam(key, amount) {
-		this.debugMsg("reserveRam: host = " + this.hostname + "; key = " + JSON.stringify(key) + "; amount = " + amount + "; entry = " + this.reserved_memory.get(key));
+		this.debug(2, "reserveRam: host = " + this.hostname + "; key = " + JSON.stringify(key) + "; amount = " + amount + "; entry = " + this.reserved_memory.get(key));
 		if(this.reserved_memory.has(key)) {
 			const cur_amount = this.reserved_memory.get(key);
 			this.reserved_memory.set(key, cur_amount + amount);
@@ -277,17 +274,18 @@ class MemoryBucket {
 		}
 	}
 	releaseRam(key) {
-		this.debugMsg("releaseRam: entries = "
+		this.debug(1, "releaseRam called with key " + key);
+		this.debug(3, "releaseRam: entries = "
 			+ JSON.stringify(Array.from(this.reserved_memory.entries())));
-		this.debugMsg("releaseRam: host = " + this.hostname
-			+ "; key = " + JSON.stringify(key)
+		this.debug(2, "releaseRam: host = " + this.hostname
+			+ "; key = " + key
 			+ "; entry = " + this.reserved_memory.get(key));
 		this.reserved_memory.delete(key);
 	}
 
-	debugMsg(string) {
-		if(this.debug) {
-			this.ns.print("DEBUG: MemoryBucket: " + string);
+	debug(level, string) {
+		if(level <= this.debug_level) {
+			this.pool.ns.print("DEBUG: MemoryBucket: " + string);
 		}
 	}
 }
