@@ -8,7 +8,7 @@ export async function main(ns) {
 	var money = ns.getServerMoneyAvailable("home");
 	if(!player.tor) {
 		if(200000 < money) {
-			ns.tprint("Purchase TOR Server to gain access to the darkweb");
+			ns.toast("Purchase TOR Server to gain access to the darkweb", info, 5000);
 		}
 	}
 	else {
@@ -24,14 +24,7 @@ export async function main(ns) {
 	backdoorCheck(ns, "I.I.I.I", "The Black Hand");
 	backdoorCheck(ns, "run4theh111z", "BitRunners");
 
-	// Manual Todo Tasks
-	ns.tprint("")
-	ns.tprint("Update memory allocation to use reserved space for user commands.")
-	ns.tprint("Write grow server");
-	ns.tprint("Write hack server");
-	ns.tprint("Write coding contract scripts");
-	
-	rpc.exit();
+	await rpc.exit();
 }
 
 function backdoorCheck(ns, server_name, faction_name) {
@@ -39,7 +32,7 @@ function backdoorCheck(ns, server_name, faction_name) {
 
 	if(!server.backdoorInstalled) {
 		if(ns.getHackingLevel() >= server.requiredHackingSkill) {
-			ns.tprint("Install backdoor on server \"" + server_name + "\" in order to join " + faction_name);
+			ns.toast("Install backdoor on server \"" + server_name + "\" in order to join " + faction_name, "info", 5000);
 		}
 	}
 }
@@ -47,6 +40,6 @@ function backdoorCheck(ns, server_name, faction_name) {
 function darkwebFile(ns, filename, cost) {
 	var money = ns.getServerMoneyAvailable("home");
 	if((!ns.fileExists(filename, "home")) && (cost < money)) {
-		ns.tprint("Purchase " + filename + " from the darkweb");
+		ns.toast("Purchase " + filename + " from the darkweb", "info", 5000);
 	}
 }

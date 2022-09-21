@@ -176,7 +176,11 @@ async function weaken_threads(mcp, rest) {
 	var target = rest.shift();
 	if(undefined === target) {
 		mcp.ns.tprint("USAGE: mcp weaken [target]");
-		mcp.ns.exit();
+		return;
+	}
+	else if(!mcp.servers.server_data.has(target)) {
+		mcp.ns.tprint("ERROR: " + target + " is not a valid hostname");
+		return;
 	}
 	var task = mcp.createTask("Weaken " + target, "weaken-threads");
 	task.target = target;
@@ -186,17 +190,21 @@ async function weaken_threads(mcp, rest) {
 async function weaken_server(mcp, threads_task) {
 	if(0 == threads_task.weaken_threads) { return; }
 	const target = threads_task.target;
-	var task = mcp.createTask("Weaken " + target, "weaken-server");
-	task.target = target;
-	task.sec_per_weaken = threads_task.sec_per_weaken;
-	task.min_security = threads_task.min_security;
-	var weaken_server_ram = mcp.ns.getScriptRam("/rpc/weaken-server.js", "home");
-	mcp.debugMsg("weaken_server_ram = " + weaken_server_ram);
-	await mcp.servers.reserveMemory(weaken_server_ram, 1, task);
+	var job = mcp.createTask("Weaken " + target, "weaken");
+	job.target = target;
+	job.sec_per_weaken = threads_task.sec_per_weaken;
+	job.min_security = threads_task.min_security;
 	var weaken_ram = mcp.ns.getScriptRam("/rpc/weaken.js", "home");
-	mcp.debugMsg("weaken_ram = " + weaken_ram);
-	await mcp.servers.reserveMemory(weaken_ram, threads_task.weaken_threads, task);
-	mcp.debugMsg("Weaken_server task = " + JSON.stringify(task))
+	mcp.debug(2, "weaken_ram = " + weaken_ram);
+	await mcp.servers.reserveMemory(weaken_ram, threads_task.weaken_threads, job);
+	mcp.debug(2, "Weaken server job = " + JSON.stringify(job));
+	var task = mcp.createTask({
+		label: "Startup weaken server",
+		server: "weaken",
+		server_port: 19,
+		job: job,
+	});
+	mcp.debug(2, "Weaken server task = " + JSON.stringify(task));
 	mcp.tasks.push(task);
 }
 

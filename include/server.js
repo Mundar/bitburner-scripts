@@ -4,7 +4,7 @@ import * as fmt from "/include/formatting.js";
 
 // The purpose of this is to handle everything with a server program. It handles its reserved memory and executing subtasks.
 //
-// It will support several different paradigms, but initially it will support tha main one.
+// It will support several different paradigms, but initially it will support the main one.
 //	1. A server that starts multiple subtasks and then waits for all of them to finish.
 //	2. A server that starts subtasks and adds new tasks as old tasks complete.
 //
@@ -26,11 +26,10 @@ import * as fmt from "/include/formatting.js";
 //		map.runTask(task);
 //		map.reserveMemory(script_ram, threads, task);
 export class Server {
-	constructor(ns, port) {
+	constructor(ns) {
+		this.debug_level = 1;
 		this.ns = ns;
-		this.io = new IO(ns, port);
 		this.task = JSON.parse(ns.args[0]);
-		this.port = port;
 		this.ports = [20];
 		if(this.task.port !== undefined) {
 			this.ports = [this.task.port];
@@ -38,75 +37,81 @@ export class Server {
 		if((undefined !== this.task.ports) && (Array.isArray(this.task.ports))) {
 			this.ports = [].concat(this.task.ports);
 		}
-		this.pool = new MemoryPool(ns, this.task);
-		this.task_queue = [];
-		this.message_queue = [];
-		this.task_count = 0;
-		this.tasks_by_id = new Map();
-		this.tasks_by_pid = new Map();
-		this.debug = true;
-	}
-	addTasks(task, threads) {
-		if(undefined === task.port) {
-			task.port = this.port;
+		if(this.task.server_port === undefined) {
+			this.log("ERROR: Server task doesn't have a defined port number.");
+			this.exit();
+			ns.exit();
 		}
-		this.pool.reserveMemory(task, threads, this.task_queue);
+		this.port = this.task.server_port;
+		this.io = new IO(ns, this.port);
+		this.jobs = new Map();
+		if(this.task.job !== undefined) {
+			this.io.sendToSelf(this.task);
+		}
+		else {
+			this.log("ERROR: Server needs at least one job assigned");
+			this.exit();
+			ns.exit();
+		}
+		this.message_queue = [];
+		this.job_handlers = new Map();
 	}
-	async runTasks() {
-		var disabled_sleep = false;
+	async tasksLoop() {
+		var disabled_sleep_log = false;
 		if(this.ns.isLogEnabled("sleep")) {
-			disabled_sleep = true;
 			this.ns.disableLog("sleep");
+			disabled_sleep_log = true;
 		}
-		this.message_queue = [];
-		this.debugMsg("runTasks: task_queue = " + JSON.stringify(this.task_queue));
-		while(0 < this.task_queue.length) {
-			const task = this.task_queue.shift();
-			await this.#runTask(task);
-		}
-		this.debugMsg("runTasks: task_count = " + this.task_count)
-		while(0 < this.task_count) {
+		while((0 < this.jobs.size) || (this.io.messageAvailable())) {
 			if(this.io.messageAvailable()) {
-				const message = this.io.getMessage();
-				this.debugMsg("runTasks: Received message = " + message);
-				this.message_queue.push(message);
-				const task = JSON.parse(message);
-				if((undefined === task.type) || ("complete" == task.type)) {
-					this.debugMsg("runTasks: Finishing task = " + message);
-					this.finishTask(task);
+				var message = this.io.getMessage();
+				this.debug(3, "tasksLoop: Received message: " + JSON.stringify(message));
+				if(undefined !== message.job_id) {
+					this.debug(1, "tasksLoop: Received message for job " + message.job_id);
+					var job = this.jobs.get(message.job_id);
+					this.debug(3, "tasksLoop: job = " + JSON.stringify(job));
+					if(undefined !== job) {
+						job.handleMessage(message);
+						if(job.done) {
+							if((!job.cleanup()) || (!await job.start())) {
+								this.send(job.task);
+								this.jobs.delete(message.job_id);
+							}
+						}
+					}
 				}
-				else if("log-message" == task.type) {
-					this.ns.print(task.text);
+				else {
+					if(undefined !== message.job) {
+						this.debug(1, "tasksLoop: Adding new job")
+						this.debug(3, "tasksLoop: message = " + JSON.stringify(message))
+						var job = new Job(this, message.job);
+						if(this.job_handlers.has(message.job.action)) {
+							this.debug(3, "tasksLoop: Adding new job with action " + message.job.action);
+							job.handler = this.job_handlers.get(message.job.action);
+							this.jobs.set(message.job.id, job);
+							this.job_count += 1;
+							if(!await job.start()) {
+								this.ns.print("WARNING: Job " + message.job.id + " failed to start");
+								this.send(job.task);
+								this.jobs.delete(message.job.id);
+							}
+						}
+						else {
+							this.ns.print("ERROR: Failed to start job #" + message.job.id
+								+ " because " + message.job.action + " is not supported");
+						}
+					}
+					else {
+						this.ns.print("ERROR: Received unsuported message: " + JSON.stringify(message));
+					}
 				}
 			}
-			await this.ns.sleep(100);
+			await this.ns.sleep(50);
 		}
-		if(disabled_sleep) { this.ns.enableLog("sleep"); }
+		if(disabled_sleep_log) { this.ns.enableLog("sleep"); }
 	}
-	async #runTask(task) {
-		if("home" != task.host) {
-			await this.ns.scp("/include/formatting.js", task.host, "home");
-			await this.ns.scp("/include/rpc.js", task.host, "home");
-			await this.ns.scp("/include/server.js", task.host, "home");
-			await this.ns.scp("/include/io.js", task.host, "home");
-			await this.ns.scp(task.script, task.host, "home");
-		}
-		const pid = this.ns.exec(task.script, task.host, task.threads, JSON.stringify(task));
-		if(0 != pid) {
-			task.pid = pid;
-			this.tasks_by_id.set(task.id, task);
-			this.tasks_by_pid.set(pid, task);
-			this.task_count += 1;
-		}
-	}
-	finishTask(task) {
-		const record = this.tasks_by_id.get(task.id);
-		this.tasks_by_id.delete(task.id);
-		if(undefined !== record) {
-			this.tasks_by_pid.delete(record.pid);
-			this.task_count -= 1;
-		}
-		this.pool.finishedTask(task);
+	addJobHandler(name, handlers) {
+		this.job_handlers.set(name, handlers);
 	}
 	hasMessage() {
 		return (0 < this.message_queue.length);
@@ -134,18 +139,121 @@ export class Server {
 		};
 		await this.send(message);
 	}
-	debugMsg(string) {
-		if(this.debug) {
+
+	debug(level, string) {
+		if(this.debug_level >= level) {
 			this.ns.print("DEBUG: Server: " + string);
+		}
+	}
+}
+
+class Job {
+	constructor(server, job) {
+		this.debug_level = 1;
+		this.ns = server.ns;
+		this.server = server;
+		this.task = job;
+		this.handler = {};
+		this.pool = new MemoryPool(this.ns, this.task);
+		this.task_count = 0;
+		this.tasks_by_id = new Map();
+		this.tasks_by_pid = new Map();
+		this.task_queue = [];
+		this.message_queue = [];
+		this.task_count = 0;
+	}
+	get done() { return (0 == this.task_count); }
+	async start() {
+		if(undefined !== this.handler.setup_tasks) {
+			if(await this.handler.setup_tasks(this)) {
+				await this.runTasks();
+			}
+			else {
+				return false;
+			}
+		}
+		return (0 < this.task_count);
+	}
+	cleanup() {
+		if(undefined !== this.handler.cleanup_tasks) {
+			return this.handler.cleanup_tasks(this);
+		}
+		return false;
+	}
+	handleMessage(message) {
+		if((undefined === message.type) || ("completed" == message.type)) {
+			this.message_queue.push(message);
+			this.finishedTask(message);
+			if(undefined !== this.handler.cleanup_task) {
+				return this.handler.cleanup_task(this, message);
+			}
+			return true;
+		}
+	}
+	addTasks(task, threads) {
+		if(undefined === task.port) {
+			task.port = this.server.port;
+			task.job_id = this.task.id;
+		}
+		this.debug(3, "addTasks: Reserving memory for task " + JSON.stringify(task))
+		this.pool.reserveMemory(task, threads, this.task_queue);
+	}
+	async runTasks() {
+		this.message_queue = [];
+		this.debug(2, "runTasks: task_queue = " + JSON.stringify(this.task_queue));
+		while(0 < this.task_queue.length) {
+			const task = this.task_queue.shift();
+			await this.#runTask(task);
+		}
+		this.debug(2, "runTasks: task_count = " + this.task_count)
+	}
+	async #runTask(task) {
+		if("home" != task.host) {
+			await this.ns.scp("/include/formatting.js", task.host, "home");
+			await this.ns.scp("/include/rpc.js", task.host, "home");
+			await this.ns.scp("/include/server.js", task.host, "home");
+			await this.ns.scp("/include/io.js", task.host, "home");
+			await this.ns.scp(task.script, task.host, "home");
+		}
+		const pid = this.ns.exec(task.script, task.host, task.threads, JSON.stringify(task));
+		if(0 != pid) {
+			task.pid = pid;
+			this.tasks_by_id.set(task.id, task);
+			this.tasks_by_pid.set(pid, task);
+			this.task_count += 1;
+		}
+	}
+	finishedTask(task) {
+		this.debug(3, "finishedTask: task = " + JSON.stringify(task));
+		const record = this.tasks_by_id.get(task.id);
+		this.tasks_by_id.delete(task.id);
+		if(undefined !== record) {
+			this.tasks_by_pid.delete(record.pid);
+			this.task_count -= 1;
+		}
+		this.pool.finishedTask(task);
+	}
+	hasMessage() {
+		return (0 < this.message_queue.length);
+	}
+	getMessage() {
+		return this.message_queue.pop();
+	}
+
+	debug(level, string) {
+		if(this.debug_level >= level) {
+			this.ns.print("DEBUG: Job: " + string);
 		}
 	}
 }
 
 class MemoryPool {
 	constructor(ns, task) {
-		this.debug_level = 3;
+		this.debug_level = 1;
 		this.ns = ns;
+		ns.print("Initializing MemoryPool from " + JSON.stringify(task));
 		this.hosts = new Map();
+		ns.print("Setting up memory from " + JSON.stringify(task.reserved));
 		for(var rec of task.reserved.hosts[Symbol.iterator]()) {
 			this.debug(2, "Adding " + rec.ram + "GB of RAM on server " + rec.host);
 			if(this.hosts.has(rec.host)) {
@@ -157,7 +265,6 @@ class MemoryPool {
 			}
 		}
 		// Permanently reserve memory used by this script.
-		this.memory_uninitialized = true;
 		this.uniqueID = 0;
 		this.debug(1, "Memory given to this server:");
 		for(var [host, bucket] of this.hosts.entries()) {
@@ -177,15 +284,6 @@ class MemoryPool {
 		this.debug(2, "reserveMemory: queue length = " + task_queue.length
 			+ "; requested_threads = " + requested_threads
 			+ "; task = " + JSON.stringify(task));
-		if(this.memory_uninitialized) {
-			const script = this.ns.getScriptName();
-			const script_ram = this.ns.getScriptRam(script);
-			var memory = this.hosts.get(this.ns.getHostname());
-			this.debug(1, "Performing one-time memory allocation for " + script + " of "
-				+ script_ram + "GB of RAM from host " + memory.hostname);
-			memory.reserveRam(0, script_ram);
-			this.memory_uninitialized = false;
-		}
 		var remaining_threads = requested_threads;
 		if(undefined === task.script) {
 			task.script = "/rpc/" + task.action + ".js";
@@ -241,7 +339,7 @@ class MemoryPool {
 
 class MemoryBucket {
 	constructor(ram, hostname, pool) {
-		this.debug_level = 3;
+		this.debug_level = 1;
 		this.hostname = hostname;
 		this.pool = pool;
 		this.max_ram = ram;

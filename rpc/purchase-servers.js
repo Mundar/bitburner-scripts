@@ -19,8 +19,8 @@ export async function main(ns) {
 			afford.cost = ns.getPurchasedServerCost(afford.ram);
 		}
 		ns.tprint("Purchased servers cost: (Money = $" + fmt.commafy(our_money, 2) + ")");
-		ns.tprint("Server RAM  Cost             Max");
-		ns.tprint("----------  ---------------  ---");
+		ns.tprint("Server RAM  Cost       Max");
+		ns.tprint("----------  ---------  ---");
 		var lines = 0;
 		var cur_ram = afford.ram;
 		var cur_cost = ns.getPurchasedServerCost(cur_ram);
@@ -28,7 +28,7 @@ export async function main(ns) {
 			var cur_max = Math.floor(our_money/cur_cost);
 			if(cur_max > max_servers) {cur_max = max_servers; }
 			ns.tprint(fmt.align_right(cur_ram, 10)
-				+ fmt.align_right("$" + fmt.commafy(cur_cost), 17)
+				+ fmt.align_right("$" + fmt.notation(cur_cost), 11)
 				+ fmt.align_right(cur_max, 5));
 			if(1 < cur_ram) {
 				cur_ram = Math.round(cur_ram / 2);

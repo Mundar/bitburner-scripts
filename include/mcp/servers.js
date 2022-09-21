@@ -1,6 +1,7 @@
 /** @param {NS} ns */
 export class Servers {
 	constructor(ns, mcp) {
+		this.debug_level = 1;
 		this.ns = ns;
 		this.mcp = mcp;
 		this.server_data = new Map();
@@ -16,7 +17,6 @@ export class Servers {
 			host: '',
 			ram: 0,
 		};
-		this.debug = true;
 	}
 
 	async staticMemory(ram, host) {
@@ -25,7 +25,7 @@ export class Servers {
 	}
 
 	async reserveMemory(ram, requested_threads, task) {
-		this.debugMsg("reserveMemory: ram = " + ram
+		this.debug(2, "reserveMemory: ram = " + ram
 			+ "; requested_threads = " + requested_threads
 			+ "; task = " + JSON.stringify(task));
 		var remaining_threads = requested_threads;
@@ -36,7 +36,7 @@ export class Servers {
 				hosts: [],
 			}
 		}
-		this.debugMsg("reserveMemory: task = " + JSON.stringify(task));
+		this.debug(2, "reserveMemory: task = " + JSON.stringify(task));
 		for(var host of this.useful_servers[Symbol.iterator]()) {
 			var server = this.getServerData(host);
 			var free_mem = server.freeRam();
@@ -153,7 +153,7 @@ export class Servers {
 	async finishedTask(task) {
 		if((task.reserved !== undefined)) {
 			for(var host of task.reserved.hosts[Symbol.iterator]()) {
-				this.debugMsg("Servers.finishedTask: reserved = " + JSON.stringify(host));
+				this.debug(2, "Servers.finishedTask: reserved = " + JSON.stringify(host));
 				this.getServerData(host.host).releaseRam(task.id);
 			}
 		}
@@ -182,7 +182,7 @@ export class Servers {
 		var script_ram = this.ns.getScriptRam(task.script);
 		for(var host of this.useful_servers[Symbol.iterator]()) {
 			const server = this.getServerData(host);
-			this.debugMsg("runIdleTask: host = " + host);
+			this.debug(2, "runIdleTask: host = " + host);
 			var free_mem = server.freeIdleRam();
 			if("home" == host) {
 				if(free_mem > this.mcp.reserved_ram) { free_mem -= this.mcp.reserved_ram; }
@@ -192,7 +192,7 @@ export class Servers {
 			if((undefined !== remaining_threads) && (threads > remaining_threads)) {
 				threads = remaining_threads;
 			}
-			this.debugMsg("runIdleTask: threads = " + threads);
+			this.debug(2, "runIdleTask: threads = " + threads);
 			if(0 < threads) {
 				task.host = host;
 				const pid = await this.mcp.directRunRPC(task, threads);
@@ -210,8 +210,8 @@ export class Servers {
 		return false;		
 	}
 
-	debugMsg(string) {
-		if(this.debug) {
+	debug(level, string) {
+		if(this.debug_level >= level) {
 			this.ns.print("DEBUG: Servers: " + string);
 		}
 	}
@@ -227,6 +227,7 @@ function chooseHostFunction(servers, host, info, output) {
 
 class ServerData {
 	constructor(servers, hostname, init) {
+		this.debug_level = 1;
 		this.servers = servers;
 		this.hostname = hostname;
 		if(init.level !== undefined) { this.level = init.level; }
@@ -248,7 +249,6 @@ class ServerData {
 		else { this.links = []; }
 		this.reserved_memory = new Map();
 		this.idle_pids = new Map();
-		this.debug = false;
 	}
 	updateCheck(cur, item, name) {
 		if(undefined === item) { return false; }
@@ -282,17 +282,17 @@ class ServerData {
 		if(update.links !== undefined) { this.links = update.links; }
 	}
 	freeRam() {
-		this.debugMsg("freeRam: this.max_ram = " + this.max_ram);
+		this.debug(2, "freeRam: this.max_ram = " + this.max_ram);
 		if(this.max_ram === undefined) { return 0; }
 		var free_ram = this.max_ram;
-		this.debugMsg("freeRam: free_ram = " + free_ram);
+		this.debug(2, "freeRam: free_ram = " + free_ram);
 		for(const [key, ram] of this.reserved_memory.entries()) {
 			var used_ram = ram;
-			this.debugMsg("key = " + JSON.stringify(key) + "; used_ram = " + used_ram)
+			this.debug(2, "key = " + JSON.stringify(key) + "; used_ram = " + used_ram)
 			if(used_ram === undefined) { used_ram = 0; }
-			this.debugMsg("freeRam: used_ram = " + used_ram);
+			this.debug(2, "freeRam: used_ram = " + used_ram);
 			free_ram -= used_ram;
-			this.debugMsg("freeRam: free_ram = " + free_ram);
+			this.debug(2, "freeRam: free_ram = " + free_ram);
 		}
 		return free_ram;
 	}
@@ -307,7 +307,7 @@ class ServerData {
 	}
 	async reserveRam(key, amount) {
 		await this.killIdleTasks();
-		this.debugMsg("reserveRam: host = " + this.hostname + "; key = " + JSON.stringify(key) + "; amount = " + amount + "; entry = " + this.reserved_memory.get(key));
+		this.debug(2, "reserveRam: host = " + this.hostname + "; key = " + JSON.stringify(key) + "; amount = " + amount + "; entry = " + this.reserved_memory.get(key));
 		if(this.reserved_memory.has(key)) {
 			const cur_amount = this.reserved_memory.get(key);
 			this.reserved_memory.set(key, cur_amount + amount);
@@ -317,9 +317,9 @@ class ServerData {
 		}
 	}
 	releaseRam(key) {
-		this.debugMsg("releaseRam: entries = "
+		this.debug(2, "releaseRam: entries = "
 			+ JSON.stringify(Array.from(this.reserved_memory.entries())));
-		this.debugMsg("releaseRam: host = " + this.hostname
+		this.debug(2, "releaseRam: host = " + this.hostname
 			+ "; key = " + JSON.stringify(key)
 			+ "; entry = " + this.reserved_memory.get(key));
 		this.reserved_memory.delete(key);
@@ -337,8 +337,8 @@ class ServerData {
 		}
 	}
 
-	debugMsg(string) {
-		if(this.debug) {
+	debug(level, string) {
+		if(this.debug_level >= level) {
 			this.ns.print("DEBUG: ServerData: " + string);
 		}
 	}

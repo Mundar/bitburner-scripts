@@ -11,7 +11,7 @@ export class IO {
 	checkPort() {
 		var count = 0;
 		while(!this.port_handle.empty()) {
-			this.queue.push(this.port_handle.read());
+			this.queue.push(JSON.parse(this.port_handle.read()));
 			count++;
 		}
 		return count;
@@ -28,5 +28,9 @@ export class IO {
 
 	async waitForMessage() {
 		while(!messageAvailable()) {  }
+	}
+
+	sendToSelf(obj) {
+		this.queue.push(obj);
 	}
 }
