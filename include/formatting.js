@@ -82,6 +82,16 @@ export function decimal(s, d) {
 	return parts[0] + decimal;
 }
 
+export function fixed(s, d) {
+	var parts = String(s).split(".", 2);
+	if(1 == parts.length) { parts.push("0"); }
+	while(parts[1].length < d) {
+		parts[1] += "0";
+	}
+	parts[1] = parts[1].substring(0,d);
+	return parts.join('.');
+}
+
 export function time(ms) {
 	const time = Math.round(ms);
 	const millis = time % 1000;
@@ -111,6 +121,9 @@ export function textToGB(text) {
 		var value = parseInt(parts.join(''));
 		if('P' == mult_char) {
 			value *= 1024*1024;
+		}
+		else if('E' == mult_char) {
+			value *= 1024*1024*1024;
 		}
 		else if('T' == mult_char) {
 			value *= 1024;

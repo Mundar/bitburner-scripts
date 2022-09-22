@@ -64,6 +64,26 @@ export class Servers {
 		return false;
 	}
 
+	availableThreads(ram) {
+		this.debug(1, "availableThreads: ram = " + ram);
+		var threads = 0;
+		for(var host of this.useful_servers[Symbol.iterator]()) {
+			var server = this.getServerData(host);
+			var free_mem = server.freeRam();
+			if("home" == host) {
+				if(free_mem > this.mcp.reserved_ram) {
+					free_mem -= this.mcp.reserved_ram;
+				}
+				else {
+					free_mem = 0;
+				}
+			}
+			threads += Math.floor(free_mem / ram);
+		}
+		this.debug(1, "availbleThreads returning " + threads + " threads");
+		return threads;
+	}
+
 	updateServer(hostname, details) {
 		if(this.server_data.has(hostname)) {
 			let server = this.server_data.get(hostname);

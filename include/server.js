@@ -2,29 +2,6 @@
 import {IO} from "/include/io.js";
 import * as fmt from "/include/formatting.js";
 
-// The purpose of this is to handle everything with a server program. It handles its reserved memory and executing subtasks.
-//
-// It will support several different paradigms, but initially it will support the main one.
-//	1. A server that starts multiple subtasks and then waits for all of them to finish.
-//	2. A server that starts subtasks and adds new tasks as old tasks complete.
-//
-// Here is the top level functionality for type 1.
-//	* Create server object
-//	* Tell it all of the subtasks to create.
-//	* Give it an idle task for any extra memory.
-//	* Tell server to start cycle.
-//	* Return when all of the subtasks are complete.
-//
-// Task Object
-//		action: "script-name"	// runs "/rpc/script-name.js"
-//		host: "host-server"
-//		target: "target-server"
-//		threads: 5				// number of threads
-//		delay: 1000				// number of milliseconds to wait before starting.
-// Interface:
-//		var map = new Subtasks(ns, task);
-//		map.runTask(task);
-//		map.reserveMemory(script_ram, threads, task);
 export class Server {
 	constructor(ns) {
 		this.debug_level = 1;
@@ -55,6 +32,7 @@ export class Server {
 		}
 		this.message_queue = [];
 		this.job_handlers = new Map();
+		this.idle_action = "hack-exp";
 	}
 	async tasksLoop() {
 		var disabled_sleep_log = false;
@@ -73,7 +51,7 @@ export class Server {
 					if(undefined !== job) {
 						job.handleMessage(message);
 						if(job.done) {
-							if((!job.cleanup()) || (!await job.start())) {
+							if((!await job.cleanup()) || (!await job.start())) {
 								this.send(job.task);
 								this.jobs.delete(message.job_id);
 							}
@@ -91,7 +69,9 @@ export class Server {
 							this.jobs.set(message.job.id, job);
 							this.job_count += 1;
 							if(!await job.start()) {
-								this.ns.print("WARNING: Job " + message.job.id + " failed to start");
+								if((undefined === message.job.local) || (false == message.job.local)) {
+									this.ns.print("WARNING: Job " + message.job.id + " failed to start");
+								}
 								this.send(job.task);
 								this.jobs.delete(message.job.id);
 							}
@@ -158,9 +138,9 @@ class Job {
 		this.task_count = 0;
 		this.tasks_by_id = new Map();
 		this.tasks_by_pid = new Map();
+		this.idle_pids = [];
 		this.task_queue = [];
 		this.message_queue = [];
-		this.task_count = 0;
 	}
 	get done() { return (0 == this.task_count); }
 	async start() {
@@ -174,9 +154,16 @@ class Job {
 		}
 		return (0 < this.task_count);
 	}
-	cleanup() {
+	async cleanup() {
+		for(const pid of this.idle_pids[Symbol.iterator]()) {
+			this.ns.kill(pid);
+		}
+		while(0 < this.idle_pids.length) {
+			const pid = this.idle_pids.pop();
+			while(this.ns.isRunning(pid)) { await this.ns.sleep(25); }
+		}
 		if(undefined !== this.handler.cleanup_tasks) {
-			return this.handler.cleanup_tasks(this);
+			return await this.handler.cleanup_tasks(this);
 		}
 		return false;
 	}
@@ -198,6 +185,16 @@ class Job {
 		this.debug(3, "addTasks: Reserving memory for task " + JSON.stringify(task))
 		this.pool.reserveMemory(task, threads, this.task_queue);
 	}
+	addIdleTasks() {
+		if((undefined === this.server.idle_action) || ("" == this.server.idle_action)) { return; }
+		var task = {
+			label: "Idle task",
+			action: this.server.idle_action,
+			idle: true,
+		};
+		const threads = this.pool.availableThreads(task);
+		addTasks(task, threads);
+	}
 	async runTasks() {
 		this.message_queue = [];
 		this.debug(2, "runTasks: task_queue = " + JSON.stringify(this.task_queue));
@@ -218,9 +215,14 @@ class Job {
 		const pid = this.ns.exec(task.script, task.host, task.threads, JSON.stringify(task));
 		if(0 != pid) {
 			task.pid = pid;
-			this.tasks_by_id.set(task.id, task);
 			this.tasks_by_pid.set(pid, task);
-			this.task_count += 1;
+			if(true == task.idle) {
+				this.idle_pids.push(pid);
+			}
+			else {
+				this.tasks_by_id.set(task.id, task);
+				this.task_count += 1;
+			}
 		}
 	}
 	finishedTask(task) {
@@ -228,7 +230,9 @@ class Job {
 		const record = this.tasks_by_id.get(task.id);
 		this.tasks_by_id.delete(task.id);
 		if(undefined !== record) {
-			this.tasks_by_pid.delete(record.pid);
+			if(undefined !== record.pid) {
+				this.tasks_by_pid.delete(record.pid);
+			}
 			this.task_count -= 1;
 		}
 		this.pool.finishedTask(task);
@@ -286,7 +290,12 @@ class MemoryPool {
 			+ "; task = " + JSON.stringify(task));
 		var remaining_threads = requested_threads;
 		if(undefined === task.script) {
-			task.script = "/rpc/" + task.action + ".js";
+			if((undefined === task.idle) && (flase == task.idle)) {
+				task.script = "/rpc/" + task.action + ".js";
+			}
+			else {
+				task.script = "/rpc/idle/" + task.action + ".js";
+			}
 		}
 		if(!this.ns.fileExists(task.script, "home")) {
 			this.ns.print("ERROR: Script " + task.script + " doesn't exist on home");
@@ -318,6 +327,34 @@ class MemoryPool {
 			if(0 == remaining_threads) { break; }
 		}
 		this.debug(1, "Returning " + total_threads + " from reserveMemory");
+		return total_threads;
+	}
+
+	availableThreads(task) {
+		this.debug(2, "availableThreads: task action = " + task.action);
+		if(undefined === task.script) {
+			if((undefined === task.idle) && (flase == task.idle)) {
+				task.script = "/rpc/" + task.action + ".js";
+			}
+			else {
+				task.script = "/rpc/idle/" + task.action + ".js";
+			}
+		}
+		if(!this.ns.fileExists(task.script, "home")) {
+			this.ns.print("ERROR: Script " + task.script + " doesn't exist on home");
+			return 0;
+		}
+		const ram = this.ns.getScriptRam(task.script, "home");
+		this.debug(3, "availableThreads: task = " + JSON.stringify(task));
+		var total_threads = 0;
+		for(var [host, server] of this.hosts.entries()) {
+			var free_mem = server.freeRam();
+			this.debug(3, "free_mem = " + free_mem);
+			var threads = Math.floor((free_mem + 0.001) / ram);	// Sometimes rounding of floats is weird.
+			this.debug(3, "threads = " + threads);
+			total_threads += threads;
+		}
+		this.debug(1, "Returning " + total_threads + " from availableThreads");
 		return total_threads;
 	}
 

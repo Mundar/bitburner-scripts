@@ -28,7 +28,7 @@ class MCP {
 		this.message_handlers = setupMessageHandlers();
 		this.user_handlers = setupUserHandlers();
 		this.returned_data = {};
-		this.next_minute = ns.getTimeSinceLastAug() + 60000;
+		this.next_minute = ns.getTimeSinceLastAug() + 5000;	// Run first minute tasks after 5 seconds.
 		this.minute_tasks = setupMinuteTasks();
 		this.next_minute_tasks = [];
 		this.next_ten = 10;
@@ -486,6 +486,10 @@ function add_kill_all_task(mcp) {
 function setupMinuteTasks() {
 	return [
 		{
+			label: "Display event notifications",
+			action: "notifier",
+		},
+		{
 			label: "Run idle tasks",
 			mcp_function: async function(mcp, task) {
 				if((undefined !== mcp.idle_action) && ("" != mcp.idle_action)) {
@@ -495,10 +499,6 @@ function setupMinuteTasks() {
 					await mcp.servers.runIdleTask(task);
 				}
 			}
-		},
-		{
-			label: "Display event notifications",
-			action: "notifier",
 		},
 	];
 }

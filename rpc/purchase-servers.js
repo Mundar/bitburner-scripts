@@ -41,7 +41,7 @@ export async function main(ns) {
 		const size = fmt.textToGB(rpc.task.size);
 		if(undefined === rpc.task.quantity) {
 			ns.tprint("A server with " + size + " of RAM costs $"
-				+ fmt.commafy(ns.getPurchasedServerCost(size)));
+				+ fmt.notation(ns.getPurchasedServerCost(size)));
 		}
 		else {
 			const server_cost = ns.getPurchasedServerCost(size);

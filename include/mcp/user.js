@@ -7,6 +7,7 @@ export function setupUserHandlers() {
 	handlers.set("buy", function(mcp, rest) { buy_servers(mcp, rest); } );
 	handlers.set("find", function(mcp, rest) { find_server(mcp, rest); } );
 	handlers.set("help", function(mcp, rest) { help_handler(mcp, rest); } );
+	handlers.set("infiltrate", function(mcp, rest) { view_infiltrate(mcp, rest); } );
 	handlers.set("list", function(mcp, rest) { list_servers(mcp, rest); } );
 	handlers.set("status", function(mcp, rest) { display_status(mcp, rest); } );
 	handlers.set("todo", function(mcp, rest) { display_todo(mcp, rest); } );
@@ -30,6 +31,7 @@ function help_handler(mcp, rest) {
 		mcp.ns.tprint("  status      Display status information")
 		mcp.ns.tprint("  todo        Display to do list")
 		mcp.ns.tprint("  update      Update internal data")
+		mcp.ns.tprint("  weaken      Weaken server")
 	}
 	else if("buy" == command) {
 		mcp.ns.tprint("USAGE: buy [size] [quantity]");
@@ -217,9 +219,14 @@ function analyze_server(mcp, rest) {
 	};
 	if(undefined !== target) {
 		task.target = target;
+		task.max_threads = mcp.servers.availableThreads(mcp.ns.getScriptRam("/rpc/weaken.js", "home"));
 	}
 	else {
 		task.targets = mcp.servers.hackable_servers;
 	}
 	mcp.tasks.push(mcp.createTask(task));
+}
+
+function view_infiltrate(mcp, rest) {
+	mcp.tasks.push(mcp.createTask("Display infiltration data", "infiltrate"));
 }
