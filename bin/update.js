@@ -8,6 +8,7 @@ export async function main(ns) {
 	await getFile("/include/io.js");
 	await getFile("/include/rpc.js");
 	await getFile("/include/server.js");
+
 	await getFile("/include/mcp/servers.js");
 	await getFile("/include/mcp/user.js");
 
@@ -26,6 +27,7 @@ export async function main(ns) {
 
 	await getFile("/rpc/idle/hack-exp.js");
 	await getFile("/rpc/idle/share.js");
+
 	await getFile("/rpc/servers/weaken.js");
 }
 
