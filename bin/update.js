@@ -1,36 +1,36 @@
 /** @param {NS} ns */
 export async function main(ns) {
-	await getFile("/bin/mcp.js");
-	await getFile("/bin/send.js");
-	await getFile("/bin/try-rpc.js");
+	await getFile(ns, "/bin/mcp.js");
+	await getFile(ns, "/bin/send.js");
+	await getFile(ns, "/bin/try-rpc.js");
 
-	await getFile("/include/formatting.js");
-	await getFile("/include/io.js");
-	await getFile("/include/rpc.js");
-	await getFile("/include/server.js");
+	await getFile(ns, "/include/formatting.js");
+	await getFile(ns, "/include/io.js");
+	await getFile(ns, "/include/rpc.js");
+	await getFile(ns, "/include/server.js");
 
-	await getFile("/include/mcp/servers.js");
-	await getFile("/include/mcp/user.js");
+	await getFile(ns, "/include/mcp/servers.js");
+	await getFile(ns, "/include/mcp/user.js");
 
-	await getFile("/rpc/analyze.js");
-	await getFile("/rpc/get-all-servers.js");
-	await getFile("/rpc/hack-constants.js");
-	await getFile("/rpc/infiltrate.js");
-	await getFile("/rpc/kill-all.js");
-	await getFile("/rpc/notifier.js");
-	await getFile("/rpc/purchase-servers.js");
-	await getFile("/rpc/root-server.js");
-	await getFile("/rpc/server-details.js");
-	await getFile("/rpc/todo-list.js");
-	await getFile("/rpc/weaken-threads.js");
-	await getFile("/rpc/weaken.js");
+	await getFile(ns, "/rpc/analyze.js");
+	await getFile(ns, "/rpc/get-all-servers.js");
+	await getFile(ns, "/rpc/hack-constants.js");
+	await getFile(ns, "/rpc/infiltrate.js");
+	await getFile(ns, "/rpc/kill-all.js");
+	await getFile(ns, "/rpc/notifier.js");
+	await getFile(ns, "/rpc/purchase-servers.js");
+	await getFile(ns, "/rpc/root-server.js");
+	await getFile(ns, "/rpc/server-details.js");
+	await getFile(ns, "/rpc/todo-list.js");
+	await getFile(ns, "/rpc/weaken-threads.js");
+	await getFile(ns, "/rpc/weaken.js");
 
-	await getFile("/rpc/idle/hack-exp.js");
-	await getFile("/rpc/idle/share.js");
+	await getFile(ns, "/rpc/idle/hack-exp.js");
+	await getFile(ns, "/rpc/idle/share.js");
 
-	await getFile("/rpc/servers/weaken.js");
+	await getFile(ns, "/rpc/servers/weaken.js");
 }
 
-async function getFile(path) {
+async function getFile(ns, path) {
 	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master" + path, path);
 }
