@@ -1,36 +1,34 @@
 /** @param {NS} ns */
 export async function main(ns) {
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/bin/mcp.js", "/bin/mcp.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/bin/send.js", "/bin/send.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/bin/try-rpc.js", "/bin/try-rpc.js");
+	await getFile("/bin/mcp.js");
+	await getFile("/bin/send.js");
+	await getFile("/bin/try-rpc.js");
 
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/formatting.js", "/include/formatting.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/rpc.js", "/include/rpc.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/server.js", "/include/server.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/io.js", "/include/io.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/mcp/servers.js", "/include/mcp/servers.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/include/mcp/user.js", "/include/mcp/user.js");
+	await getFile("/include/formatting.js");
+	await getFile("/include/io.js");
+	await getFile("/include/rpc.js");
+	await getFile("/include/server.js");
+	await getFile("/include/mcp/servers.js");
+	await getFile("/include/mcp/user.js");
 
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/get-all-servers.js", "/rpc/get-all-servers.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/hack-constants.js", "/rpc/hack-constants.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/infiltrate.js", "/rpc/infiltrate.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/kill-all.js", "/rpc/kill-all.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/purchase-servers.js", "/rpc/purchase-servers.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/root-server.js", "/rpc/root-server.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/server-details.js", "/rpc/server-details.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/todo-list.js", "/rpc/todo-list.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/weaken-server.js", "/rpc/weaken-server.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/weaken-threads.js", "/rpc/weaken-threads.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/weaken.js", "/rpc/weaken.js");
+	await getFile("/rpc/analyze.js");
+	await getFile("/rpc/get-all-servers.js");
+	await getFile("/rpc/hack-constants.js");
+	await getFile("/rpc/infiltrate.js");
+	await getFile("/rpc/kill-all.js");
+	await getFile("/rpc/notifier.js");
+	await getFile("/rpc/purchase-servers.js");
+	await getFile("/rpc/root-server.js");
+	await getFile("/rpc/server-details.js");
+	await getFile("/rpc/todo-list.js");
+	await getFile("/rpc/weaken-threads.js");
+	await getFile("/rpc/weaken.js");
 
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/idle/hack-exp.js", "/rpc/idle/hack-exp.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/rpc/idle/share.js", "/rpc/idle/share.js");
+	await getFile("/rpc/idle/hack-exp.js");
+	await getFile("/rpc/idle/share.js");
+	await getFile("/rpc/servers/weaken.js");
+}
 
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/root/share.js", "share.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/root/hack-exp.js", "hack-exp.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/root/weaken.js", "weaken.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/root/grow.js", "grow.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/root/hack.js", "hack.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/root/mcp-single.js", "mcp-single.js");
-	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master/root/mcp-remote.js", "mcp-remote.js");
+async function getFile(path) {
+	await ns.wget("https://raw.githubusercontent.com/mundar/bitburner-scripts/master" + path, path);
 }
