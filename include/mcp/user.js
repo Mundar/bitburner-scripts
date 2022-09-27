@@ -5,19 +5,24 @@ export function setupUserHandlers() {
 	var handlers = new Map();
 	handlers.set("analyze", function(mcp, rest) { analyze_server(mcp, rest); } );
 	handlers.set("buy", function(mcp, rest) { buy_servers(mcp, rest); } );
+	handlers.set("corp", function(mcp, rest) { corporation_service(mcp, rest); } );
 	handlers.set("find", function(mcp, rest) { find_server(mcp, rest); } );
+	handlers.set("grow", function(mcp, rest) { get_threads(mcp, rest, "Grow", "grow", "grow-threads"); } );
+	handlers.set("hack", function(mcp, rest) { get_threads(mcp, rest, "Hack", "hack", "hack-threads"); } );
 	handlers.set("help", function(mcp, rest) { help_handler(mcp, rest); } );
 	handlers.set("infiltrate", function(mcp, rest) { view_infiltrate(mcp, rest); } );
 	handlers.set("list", function(mcp, rest) { list_servers(mcp, rest); } );
 	handlers.set("status", function(mcp, rest) { display_status(mcp, rest); } );
 	handlers.set("todo", function(mcp, rest) { display_todo(mcp, rest); } );
 	handlers.set("update", function(mcp, rest) { manual_update(mcp, rest); } );
-	handlers.set("weaken", function(mcp, rest) { weaken_threads(mcp, rest); } );
+	handlers.set("weaken", function(mcp, rest) { get_threads(mcp, rest, "Weaken", "weaken", "weaken-threads"); } );
 	return handlers;
 }
 
 export function userMessageHandlers(handlers) {
-	handlers.set("weaken-threads", async function(mcp, task) { await weaken_server(mcp, task); } );
+	handlers.set("grow-threads", async function(mcp, task) { await hack_server(mcp, task); } );
+	handlers.set("hack-threads", async function(mcp, task) { await hack_server(mcp, task); } );
+	handlers.set("weaken-threads", async function(mcp, task) { await hack_server(mcp, task); } );
 }
 
 function help_handler(mcp, rest) {
@@ -25,7 +30,10 @@ function help_handler(mcp, rest) {
 	if(undefined === command) {
 		mcp.ns.tprint("  analyze     Analyze servers for profitability");
 		mcp.ns.tprint("  buy         Access the purchase server interface");
+		mcp.ns.tprint("  corp        Corporation service")
 		mcp.ns.tprint("  find        Find path to server");
+		mcp.ns.tprint("  grow        Grow server")
+		mcp.ns.tprint("  hack        Hack server")
 		mcp.ns.tprint("  help        Display this help text");
 		mcp.ns.tprint("  list        Display list of servers");
 		mcp.ns.tprint("  status      Display status information")
@@ -72,14 +80,20 @@ function find_server(mcp, rest) {
 	var target = rest.shift();
 	if(target === undefined) {
 		mcp.ns.tprint("Common Targets:");
-		mcp.ns.tprint("  1. CSEC  2. avmnite-02h  3. I.I.I.I  4. run4theh111z  5. fulcrumassets");
+		mcp.ns.tprint("  1. CSEC  2. avmnite-02h  3. I.I.I.I  4. run4theh111z  5. w0r1d_d43m0n");
+		mcp.ns.tprint("  6. fulcrumassets  7. fulcrumtech  8. b-and-a  9. clarkeinc  10. nwo");
 		return;
 	}
 	else if("1" == target) { target = "CSEC"; }
 	else if("2" == target) { target = "avmnite-02h"; }
 	else if("3" == target) { target = "I.I.I.I"; }
 	else if("4" == target) { target = "run4theh111z"; }
-	else if("5" == target) { target = "fulcrumassets"; }
+	else if("5" == target) { target = "w0r1d_d43m0n"; }
+	else if("6" == target) { target = "fulcrumassets"; }
+	else if("7" == target) { target = "fulcrumtech"; }
+	else if("8" == target) { target = "b-and-a"; }
+	else if("9" == target) { target = "clarkeinc"; }
+	else if("10" == target) { target = "nwo"; }
 	const server = mcp.servers.getServerData(target);
 	if(server !== undefined) {
 		var backtrack = [target];
@@ -174,42 +188,6 @@ function display_todo(mcp, rest) {
 	mcp.tasks.push(mcp.createTask("Display todo list", "todo-list"));
 }
 
-async function weaken_threads(mcp, rest) {
-	var target = rest.shift();
-	if(undefined === target) {
-		mcp.ns.tprint("USAGE: mcp weaken [target]");
-		return;
-	}
-	else if(!mcp.servers.server_data.has(target)) {
-		mcp.ns.tprint("ERROR: " + target + " is not a valid hostname");
-		return;
-	}
-	var task = mcp.createTask("Weaken " + target, "weaken-threads");
-	task.target = target;
-	mcp.tasks.push(task);
-}
-
-async function weaken_server(mcp, threads_task) {
-	if(0 == threads_task.weaken_threads) { return; }
-	const target = threads_task.target;
-	var job = mcp.createTask("Weaken " + target, "weaken");
-	job.target = target;
-	job.sec_per_weaken = threads_task.sec_per_weaken;
-	job.min_security = threads_task.min_security;
-	var weaken_ram = mcp.ns.getScriptRam("/rpc/weaken.js", "home");
-	mcp.debug(2, "weaken_ram = " + weaken_ram);
-	await mcp.servers.reserveMemory(weaken_ram, threads_task.weaken_threads, job);
-	mcp.debug(2, "Weaken server job = " + JSON.stringify(job));
-	var task = mcp.createTask({
-		label: "Startup weaken server",
-		server: "weaken",
-		server_port: 19,
-		job: job,
-	});
-	mcp.debug(2, "Weaken server task = " + JSON.stringify(task));
-	mcp.tasks.push(task);
-}
-
 function analyze_server(mcp, rest) {
 	var target = rest.shift();
 	var task = {
@@ -229,4 +207,73 @@ function analyze_server(mcp, rest) {
 
 function view_infiltrate(mcp, rest) {
 	mcp.tasks.push(mcp.createTask("Display infiltration data", "infiltrate"));
+}
+
+async function corporation_service(mcp, rest) {
+	var command = rest.shift();
+	if(undefined === command) {
+		mcp.ns.tprint("USAGE: mcp corp [command] <...>");
+		return;
+	}
+	var task = mcp.createTask({
+		label: "Corporation service",
+		service: "corporation",
+		service_port: 18,
+		command: command,
+		rest: rest,
+	});
+	mcp.debug(2, "Corporation service task = " + JSON.stringify(task));
+	mcp.tasks.push(task);
+}
+
+function get_threads(mcp, rest, proper_name, name, action) {
+	var target = rest.shift();
+	if(undefined === target) {
+		mcp.ns.tprint("USAGE: mcp " + name + " [target]");
+		return;
+	}
+	else if(!mcp.servers.server_data.has(target)) {
+		mcp.ns.tprint("ERROR: " + target + " is not a valid hostname");
+		return;
+	}
+	var task = mcp.createTask({
+		label: proper_name + " " + target,
+		action: action,
+		target: target,
+		hack_consts: mcp.hack_consts,
+	});
+	mcp.tasks.push(task);
+
+}
+
+async function hack_server(mcp, threads_task) {
+	const threads =  threads_task.threads.total;
+	if(0 == threads) { return; }
+	const target = threads_task.target;
+	const name = threads_task.job_name;
+	const action = threads_task.job_action;
+	var job = mcp.createTask({
+		label: name + " " + target,
+		action: action,
+		target: target,
+		min_security: threads_task.min_security,
+		max_money: threads_task.max_money,
+	});
+	// Weaken and grow are the same size, and hack uses 50GB less memory. I
+	// use the larger value for all threads so that there aren't problems
+	// fitting all of the threads reauqired if the memory allocation get
+	// split among multiple hosts.
+	var ram = mcp.ns.getScriptRam("/rpc/weaken.js", "home");
+	mcp.debug(2, "ram = " + ram + "; threads = " + threads);
+	await mcp.servers.reserveMemory(ram, threads, job);
+	mcp.debug(2, name + " server job = " + JSON.stringify(job));
+	var task = mcp.createTask({
+		label: "Startup hack server",
+		server: "hack",
+		server_port: 19,
+		job: job,
+		hack_consts: mcp.hack_consts,
+	});
+	mcp.debug(2, "Hack server task = " + JSON.stringify(task));
+	mcp.tasks.push(task);
 }

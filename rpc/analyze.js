@@ -174,10 +174,16 @@ function get_hgw_bestimate(ns, host, threads) {
 	return bestimate;
 }
 
-function hgw_estimate_from_threads(ns, host, hack_threads) {
+function hgw_estimate_from_threads(ns, host, input_threads) {
+	var hack_threads = input_threads;
 	ns.print("Getting HGW estimates for hack threads " + hack_threads);
+	var hack_actual_percent = hack_threads * host.hack_amount;
+	if(1 < hack_actual_percent) {
+		hack_threads = Math.floor(1.0 / host.hack_amount);
+		hack_actual_percent = hack_threads * host.hack_amount;
+		ns.print("Limiting hack threads to " + hack_threads);
+	}
 	const hack_weaken_threads = Math.ceil(hack_threads*host.hack_sec/host.weaken_sec);
-	const hack_actual_percent = hack_threads * host.hack_amount;
 	const grow_needed = 1 / (1 - hack_actual_percent);
 	ns.print("Actual hack percentage/Growth percentage needed = " + (hack_actual_percent*100) + "%/" + (grow_needed*100) + "%");
 	const grow_threads = Math.ceil(ns.growthAnalyze(host.hostname, grow_needed));
@@ -201,6 +207,7 @@ function get_hgw_max_efficiency(ns, host) {
 
 	for(var hack_threads = 1; 500 >= hack_threads; ++hack_threads) {
 		const est = hgw_estimate_from_threads(ns, host, hack_threads);
+		if(est.hack_threads != hack_threads) { break; }
 		cur = est.hack_threads / est.total_threads;
 		if(cur >= max.efficiency) { max = { efficiency: cur, estimate: est }; }
 	}
@@ -216,6 +223,7 @@ function get_hgw_best_eff(ns, host) {
 
 	for(var hack_threads = 1; 500 >= hack_threads; ++hack_threads) {
 		const est = hgw_estimate_from_threads(ns, host, hack_threads);
+		if(est.hack_threads != hack_threads) { break; }
 		cur = est.hack_threads / est.total_threads;
 		if(cur >= max.efficiency) { max = { efficiency: cur, estimate: est }; }
 		if((last < peak.efficiency) && (cur < peak.efficiency)) {

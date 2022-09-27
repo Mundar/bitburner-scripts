@@ -14,6 +14,9 @@ export async function main(ns) {
 
 	await getFile(ns, "/rpc/analyze.js");
 	await getFile(ns, "/rpc/get-all-servers.js");
+	await getFile(ns, "/rpc/grow.js");
+	await getFile(ns, "/rpc/grow-threads.js");
+	await getFile(ns, "/rpc/hack.js");
 	await getFile(ns, "/rpc/hack-constants.js");
 	await getFile(ns, "/rpc/infiltrate.js");
 	await getFile(ns, "/rpc/kill-all.js");
@@ -28,7 +31,9 @@ export async function main(ns) {
 	await getFile(ns, "/rpc/idle/hack-exp.js");
 	await getFile(ns, "/rpc/idle/share.js");
 
-	await getFile(ns, "/rpc/servers/weaken.js");
+	await getFile(ns, "/rpc/servers/hack.js");
+
+	await getFile(ns, "/rpc/services/corporation.js");
 }
 
 async function getFile(ns, path) {

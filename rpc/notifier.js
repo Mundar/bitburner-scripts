@@ -8,7 +8,7 @@ export async function main(ns) {
 	var money = ns.getServerMoneyAvailable("home");
 	if(!player.tor) {
 		if(200000 < money) {
-			ns.toast("Purchase TOR Server to gain access to the darkweb", info, 5000);
+			ns.toast("Purchase TOR Server to gain access to the darkweb", "info", 5000);
 		}
 	}
 	else {
@@ -23,16 +23,19 @@ export async function main(ns) {
 	backdoorCheck(ns, "avmnite-02h", "NiteSec");
 	backdoorCheck(ns, "I.I.I.I", "The Black Hand");
 	backdoorCheck(ns, "run4theh111z", "BitRunners");
+	backdoorCheck(ns, "w0r1d_d43m0n", "next BitNode");
 
 	await rpc.exit();
 }
 
 function backdoorCheck(ns, server_name, faction_name) {
-	const server = ns.getServer(server_name);
+	if(ns.serverExists(server_name)) {
+		const server = ns.getServer(server_name);
 
-	if(!server.backdoorInstalled) {
-		if(ns.getHackingLevel() >= server.requiredHackingSkill) {
-			ns.toast("Install backdoor on server \"" + server_name + "\" in order to join " + faction_name, "info", 5000);
+		if(!server.backdoorInstalled) {
+			if(ns.getHackingLevel() >= server.requiredHackingSkill) {
+				ns.toast("Install backdoor on server \"" + server_name + "\" in order to join " + faction_name, "info", 5000);
+			}
 		}
 	}
 }

@@ -19,6 +19,7 @@ export class RPC {
 	}
 
 	async exit() {
+		this.ns.print("Exiting returning task = " + JSON.stringify(this.task));
 		await this.send(this.task);
 	}
 

@@ -79,6 +79,7 @@ export class Server {
 						else {
 							this.ns.print("ERROR: Failed to start job #" + message.job.id
 								+ " because " + message.job.action + " is not supported");
+							this.send(job.task);
 						}
 					}
 					else {
@@ -97,7 +98,7 @@ export class Server {
 		return (0 < this.message_queue.length);
 	}
 	getMessage() {
-		return this.message_queue.pop();
+		return this.message_queue.shift();
 	}
 
 	async exit() {
@@ -161,6 +162,10 @@ class Job {
 		while(0 < this.idle_pids.length) {
 			const pid = this.idle_pids.pop();
 			while(this.ns.isRunning(pid)) { await this.ns.sleep(25); }
+			if(this.tasks_by_pid.has(pid)) {
+				const idle_task = this.tasks_by_pid.get(pid);
+				this.finishedTask(idle_task);
+			}
 		}
 		if(undefined !== this.handler.cleanup_tasks) {
 			return await this.handler.cleanup_tasks(this);
@@ -185,7 +190,7 @@ class Job {
 		this.debug(3, "addTasks: Reserving memory for task " + JSON.stringify(task))
 		this.pool.reserveMemory(task, threads, this.task_queue);
 	}
-	addIdleTasks() {
+	addIdleTask() {
 		if((undefined === this.server.idle_action) || ("" == this.server.idle_action)) { return; }
 		var task = {
 			label: "Idle task",
@@ -193,7 +198,7 @@ class Job {
 			idle: true,
 		};
 		const threads = this.pool.availableThreads(task);
-		addTasks(task, threads);
+		this.addTasks(task, threads);
 	}
 	async runTasks() {
 		this.message_queue = [];
@@ -237,11 +242,14 @@ class Job {
 		}
 		this.pool.finishedTask(task);
 	}
+	availableThreads(task) {
+		return this.pool.availableThreads(task);
+	}
 	hasMessage() {
 		return (0 < this.message_queue.length);
 	}
 	getMessage() {
-		return this.message_queue.pop();
+		return this.message_queue.shift();
 	}
 
 	debug(level, string) {
@@ -276,6 +284,7 @@ class MemoryPool {
 				+ fmt.align_right(bucket.max_ram) + "GB"
 			);
 		}
+		this.idle_action = "hack-exp";
 	}
 
 	getTaskId() {
@@ -290,11 +299,11 @@ class MemoryPool {
 			+ "; task = " + JSON.stringify(task));
 		var remaining_threads = requested_threads;
 		if(undefined === task.script) {
-			if((undefined === task.idle) && (flase == task.idle)) {
+			if((undefined === task.idle) || (false == task.idle)) {
 				task.script = "/rpc/" + task.action + ".js";
 			}
 			else {
-				task.script = "/rpc/idle/" + task.action + ".js";
+				task.script = "/rpc/idle/" + this.idle_action + ".js";
 			}
 		}
 		if(!this.ns.fileExists(task.script, "home")) {
@@ -333,11 +342,11 @@ class MemoryPool {
 	availableThreads(task) {
 		this.debug(2, "availableThreads: task action = " + task.action);
 		if(undefined === task.script) {
-			if((undefined === task.idle) && (flase == task.idle)) {
+			if((undefined === task.idle) || (false == task.idle)) {
 				task.script = "/rpc/" + task.action + ".js";
 			}
 			else {
-				task.script = "/rpc/idle/" + task.action + ".js";
+				task.script = "/rpc/idle/" + this.idle_action + ".js";
 			}
 		}
 		if(!this.ns.fileExists(task.script, "home")) {
@@ -421,6 +430,141 @@ class MemoryBucket {
 	debug(level, string) {
 		if(level <= this.debug_level) {
 			this.pool.ns.print("DEBUG: MemoryBucket: " + string);
+		}
+	}
+}
+
+export class Service {
+	constructor(ns) {
+		this.debug_level = 1;
+		this.ns = ns;
+		this.task = JSON.parse(ns.args[0]);
+		this.ports = [20];
+		if(this.task.port !== undefined) {
+			this.ports = [this.task.port];
+		}
+		if((undefined !== this.task.ports) && (Array.isArray(this.task.ports))) {
+			this.ports = [].concat(this.task.ports);
+		}
+		if(this.task.service_port === undefined) {
+			this.log("ERROR: Server task doesn't have a defined port number.");
+			this.exit();
+			ns.exit();
+		}
+		this.port = this.task.service_port;
+		this.io = new IO(ns, this.port);
+		this.wake_time = Service.defaultWakeTime(ns.getTimeSinceLastAug());
+		this.tasks = [];
+		this.not_done = true;
+		this.commands = new Map();
+		this.commands.set("debug", function(service, message) { service.displayDebug(); });
+		this.commands.set("quit", function(service, message) { service.not_done = false; });
+		this.commands.set("tail", function(service, message) { service.ns.tail(); });
+		if(this.task.command !== undefined) {
+			this.io.sendToSelf(this.task);
+		}
+	}
+	async start() {
+		var disabled_sleep_log = false;
+		if(this.ns.isLogEnabled("sleep")) {
+			this.ns.disableLog("sleep");
+			disabled_sleep_log = true;
+		}
+		while(this.not_done) {
+			var sleep_length = 100;
+			if(this.io.messageAvailable()) {
+				var message = this.io.getMessage();
+				this.debug(3, "Received message: " + JSON.stringify(message));
+				if(undefined !== message.command) {
+					const command = message.command;
+					this.debug(1, "Command " + command + " received");
+					this.debug(3, "message = " + JSON.stringify(message))
+					if(this.commands.has(command)) {
+						const func = this.commands.get(command);
+						func(this, command);
+					}
+					else {
+						this.ns.print("Command " + command + " not supported");
+					}
+				}
+				else {
+					this.ns.print("ERROR: Received unsuported message: " + JSON.stringify(message));
+				}
+			}
+			else if(this.ns.getTimeSinceLastAug() >= this.wake_time) {
+				const now = this.ns.getTimeSinceLastAug();
+				if(now >= this.wake_time) {
+					if(0 == this.tasks.length) { this.not_done = false; }
+					while((0 < this.tasks.length) && (now > this.tasks.at(-1).time)) {
+						const entry = this.tasks.pop();
+						entry.func(this, entry.data);
+					}
+					if(0 < this.tasks.length) {
+						this.wake_time = this.tasks.at(-1).time;
+					}
+					else {
+						this.wake_time = Service.defaultWakeTime(now);
+					}
+				}
+				if(sleep_length > (this.wake_time - now)) {
+					sleep_length = this.wake_time - now;
+				}
+			}
+			await this.ns.sleep(sleep_length);
+		}
+		if(disabled_sleep_log) { this.ns.enableLog("sleep"); }
+	}
+	addCommand(name, func) {
+		this.commands.set(name, func);
+	}
+	addTask(func, data, delay) {
+		var time = this.ns.getTimeSinceLastAug();
+		if(undefined !== delay) { time += delay; }
+		if(time < this.wake_time) { this.wake_time = time; }
+		this.tasks.push({ time: time, func: func, data: data });
+		this.tasks.sort((a,b) => b.time - a.time);
+	}
+	displayDebug() {
+		const now = this.ns.getTimeSinceLastAug();
+		this.ns.tprint("debug_level = " + this.debug_level);
+		this.ns.tprint("now = " + now);
+		this.ns.tprint("wake_time = " + this.wake_time + " (" + this.ns.tFormat(this.wake_time - now) + ")");
+		this.ns.tprint("not_done = " + this.not_done);
+		this.ns.tprint("commands = [" + Array.from(this.commands.keys()).join(', ') + "]");
+		var times = [];
+		for(const entry of this.tasks[Symbol.iterator]()) {
+			times.push(entry.time - now);
+		}
+		this.ns.tprint("task times = [" + times.join(', ') + "]");
+		this.ns.tprint("task = " + JSON.stringify(this.task));
+	}
+	static defaultWakeTime(now) {
+		return now + (24*60*60*1000);
+	}
+
+	async exit() {
+		await this.send(this.task);
+	}
+	async send(message) {
+		for(var port of this.ports[Symbol.iterator]()) {
+			while(!await this.ns.tryWritePort(port, JSON.stringify(message))) {
+				await this.ns.sleep(200);
+			}
+		}
+	}
+	async log(log_message) {
+		var message = {
+			type: "log-message",
+			action: "mcp-log",
+			text: log_message,
+			task: this.task,
+		};
+		await this.send(message);
+	}
+
+	debug(level, string) {
+		if(this.debug_level >= level) {
+			this.ns.print("DEBUG: Server: " + string);
 		}
 	}
 }

@@ -17,7 +17,7 @@ export async function main(ns) {
 
 class MCP {
 	constructor(ns) {
-		this.debug_level = 1;
+		this.debug_level = 3;
 		this.ns = ns;
 		this.io = new IO(ns, 20);
 		this.servers = new Servers(ns, this);
@@ -37,8 +37,9 @@ class MCP {
 		this.running_tasks_by_id = new Map();
 		this.running_tasks_by_pid = new Map();
 		this.running_servers = new Map();
+		this.running_services = new Map();
 		this.needed_port_openers = initializeNeededPortOpeners();
-		this.reserved_ram = 32;		// The amount of RAM reserved on home.
+		this.reserved_ram = 1024+32;		// The amount of RAM reserved on home.
 		this.idle_action = "hack-exp";
 		this.hack_consts = {};
 	}
@@ -109,6 +110,10 @@ class MCP {
 			else if(task.server !== undefined) {
 				this.debug(2, "Calling Server: " + JSON.stringify(task));
 				return await this.callServer(task);
+			}
+			else if(task.service !== undefined) {
+				this.debug(2, "Calling Service: " + JSON.stringify(task));
+				return await this.callService(task);
 			}
 			else {
 				this.ns.print("Unsupported task: \"" + task.label + "\" has no associated function");
@@ -190,7 +195,7 @@ class MCP {
 			const ram = this.ns.getScriptRam(task.script);
 			if(!await this.servers.reserveMemory(ram, 1, task)) { return false; }
 		}
-		this.debug(2, "callRPC: Successfully reserved memory: task = " + JSON.stringify(task.reserve));
+		this.debug(2, "callRPC: Successfully reserved memory: task = " + JSON.stringify(task.reserved));
 		if(task.host != "home") {
 			await this.ns.scp("/include/formatting.js", task.host, "home");
 			await this.ns.scp("/include/rpc.js", task.host, "home");
@@ -216,7 +221,8 @@ class MCP {
 				return;
 			}
 			else {
-				this.running_servers.delete(task.server);
+				const non_running_task = this.running_servers.get(task.server);
+				this.finishedTask(non_running_task);
 			}
 		}
 		if(undefined === task.id) {
@@ -234,7 +240,7 @@ class MCP {
 			const ram = this.ns.getScriptRam(task.script);
 			if(!await this.servers.reserveMemory(ram, 1, task)) { return false; }
 		}
-		this.debug(2, "callServer: Successfully reserved memory: task = " + JSON.stringify(task.reserve));
+		this.debug(2, "callServer: Successfully reserved memory: task = " + JSON.stringify(task.reserved));
 		if(task.host != "home") {
 			await this.ns.scp("/include/formatting.js", task.host, "home");
 			await this.ns.scp("/include/rpc.js", task.host, "home");
@@ -245,25 +251,73 @@ class MCP {
 		const pid = this.ns.exec(task.script, task.host, 1, JSON.stringify(task));
 		if(0 == pid) { return false; }
 		task.pid = pid;
-		this.debug(2, "callRPC: Successfully executed task: task = " + JSON.stringify(task.reserved));
+		this.debug(2, "callServer: Successfully executed task: task = " + JSON.stringify(task.reserved));
 		this.running_tasks_by_pid.set(pid, task);
 		this.running_tasks_by_id.set(task.id, task);
 		this.running_servers.set(task.server, task);
 		return true;
 	}
 
+	async callService(task) {
+		this.debug(2, "callService: task = " + JSON.stringify(task));
+		if(this.running_services.has(task.service)) {
+			this.debug(3, "The service " + task.service + " is already running");
+			if(this.ns.isRunning(this.running_services.get(task.service).pid)) {
+				while(!this.ns.tryWritePort(task.service_port, JSON.stringify(task))) { await this.ns.sleep(100); }
+				return;
+			}
+			else {
+				const non_running_task = this.running_services.get(task.service);
+				this.finishedTask(non_running_task);
+			}
+		}
+		if(undefined === task.id) {
+			task.id = this.getTaskId();
+			this.debug(3, "callService: New service task assigned ID " + task.id);
+		}
+		if(undefined === task.script) {
+			task.script = "/rpc/services/" + task.service + ".js";
+			this.debug(3, "callService: Service script name set to " + task.script);
+			task.script_exists = this.ns.fileExists(task.script, "home");
+		}
+		if(!task.script_exists) { return false; }
+		this.debug(2, "callService: Script \"" + task.script + "\" exists.");
+		if((undefined === task.reserved) || (0 == task.reserved.total_threads)) {
+			const ram = this.ns.getScriptRam(task.script);
+			if(!await this.servers.reserveMemory(ram, 1, task)) { return false; }
+		}
+		this.debug(2, "callService: Successfully reserved memory: task = " + JSON.stringify(task.reserved));
+		if(task.host != "home") {
+			await this.ns.scp("/include/formatting.js", task.host, "home");
+			await this.ns.scp("/include/rpc.js", task.host, "home");
+			await this.ns.scp("/include/server.js", task.host, "home");
+			await this.ns.scp("/include/io.js", task.host, "home");
+			await this.ns.scp(task.script, task.host, "home");
+		}
+		const pid = this.ns.exec(task.script, task.host, 1, JSON.stringify(task));
+		if(0 == pid) { return false; }
+		task.pid = pid;
+		this.debug(2, "callService: Successfully executed task: task = " + JSON.stringify(task.reserved));
+		this.running_tasks_by_pid.set(pid, task);
+		this.running_tasks_by_id.set(task.id, task);
+		this.running_services.set(task.service, task);
+		return true;
+	}
+
 	async handleMessage(message) {
 		if(this.debug_level >= 1) {
-			var id = ""; var action = ""; var server = ""; var before = "";
+			var id = ""; var action = ""; var server = ""; var service = ""; var before = "";
 			if(undefined !== message.id) { id = "ID = " + message.id; before = "; "; }
 			if(undefined !== message.action) { action = before + "Action = " + message.action; before = "; "; }
 			if(undefined !== message.server) { server = before + "Server = " + message.server; before = "; "; }
-			this.debug(1, "Received message: " + id + action + server);
+			if(undefined !== message.service) { server = before + "Service = " + message.service; before = "; "; }
+			this.debug(1, "Received message: " + id + action + server + service);
 		}
-		if((message !== undefined) && ((message.action !== undefined) || (message.server !== undefined))) {
+		if((message !== undefined) && ((message.action !== undefined) || (message.server !== undefined) || (message.service !== undefined))) {
 			var action = "";
 			if(message.action !== undefined) { action = message.action; }
-			else { action = message.server; }
+			else if(message.server !== undefined) { action = message.server; }
+			else if(message.service !== undefined) { action = message.service; }
 			if('mcp-log' == action) {
 				this.ns.print(message.task.action + ": " + message.text);
 				return;
@@ -302,11 +356,12 @@ class MCP {
 
 	async finishedTask(task) {
 		if(this.debug_level >= 1) {
-			var id = ""; var action = ""; var server = ""; var before = "";
+			var id = ""; var action = ""; var server = ""; var service = ""; var before = "";
 			if(undefined !== task.id) { id = "ID = " + task.id; before = "; "; }
 			if(undefined !== task.action) { action = before + "Action = " + task.action; before = "; "; }
 			if(undefined !== task.server) { server = before + "Server = " + task.server; before = "; "; }
-			this.debug(1, "finishingTask: " + id + action + server);
+			if(undefined !== task.service) { service = before + "Service = " + task.service; before = "; "; }
+			this.debug(1, "finishingTask: " + id + action + server + service);
 		}
 		await this.servers.finishedTask(task);
 		const task_by_id = this.running_tasks_by_id.get(task.id);
@@ -316,6 +371,9 @@ class MCP {
 		}
 		if(undefined !== task.server) {
 			this.running_servers.delete(task.server);
+		}
+		if(undefined !== task.service) {
+			this.running_services.delete(task.service);
 		}
 	}
 
