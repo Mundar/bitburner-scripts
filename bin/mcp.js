@@ -42,6 +42,7 @@ class MCP {
 		this.reserved_ram = 1024+32;		// The amount of RAM reserved on home.
 		this.idle_action = "hack-exp";
 		this.hack_consts = {};
+		this.dependencies = setupDependencies();
 	}
 
 	async commandLoop() {
@@ -196,13 +197,7 @@ class MCP {
 			if(!await this.servers.reserveMemory(ram, 1, task)) { return false; }
 		}
 		this.debug(2, "callRPC: Successfully reserved memory: task = " + JSON.stringify(task.reserved));
-		if(task.host != "home") {
-			await this.ns.scp("/include/formatting.js", task.host, "home");
-			await this.ns.scp("/include/rpc.js", task.host, "home");
-			await this.ns.scp("/include/server.js", task.host, "home");
-			await this.ns.scp("/include/io.js", task.host, "home");
-			await this.ns.scp(task.script, task.host, "home");
-		}
+		await this.copyDependencies(task.script, task.host);
 		const pid = this.ns.exec(task.script, task.host, 1, JSON.stringify(task));
 		if(0 == pid) { return false; }
 		task.pid = pid;
@@ -241,13 +236,7 @@ class MCP {
 			if(!await this.servers.reserveMemory(ram, 1, task)) { return false; }
 		}
 		this.debug(2, "callServer: Successfully reserved memory: task = " + JSON.stringify(task.reserved));
-		if(task.host != "home") {
-			await this.ns.scp("/include/formatting.js", task.host, "home");
-			await this.ns.scp("/include/rpc.js", task.host, "home");
-			await this.ns.scp("/include/server.js", task.host, "home");
-			await this.ns.scp("/include/io.js", task.host, "home");
-			await this.ns.scp(task.script, task.host, "home");
-		}
+		await this.copyDependencies(task.script, task.host);
 		const pid = this.ns.exec(task.script, task.host, 1, JSON.stringify(task));
 		if(0 == pid) { return false; }
 		task.pid = pid;
@@ -287,13 +276,7 @@ class MCP {
 			if(!await this.servers.reserveMemory(ram, 1, task)) { return false; }
 		}
 		this.debug(2, "callService: Successfully reserved memory: task = " + JSON.stringify(task.reserved));
-		if(task.host != "home") {
-			await this.ns.scp("/include/formatting.js", task.host, "home");
-			await this.ns.scp("/include/rpc.js", task.host, "home");
-			await this.ns.scp("/include/server.js", task.host, "home");
-			await this.ns.scp("/include/io.js", task.host, "home");
-			await this.ns.scp(task.script, task.host, "home");
-		}
+		await this.copyDependencies(task.script, task.host);
 		const pid = this.ns.exec(task.script, task.host, 1, JSON.stringify(task));
 		if(0 == pid) { return false; }
 		task.pid = pid;
@@ -416,16 +399,26 @@ class MCP {
 			if(undefined === threads) { threads = 1; }
 			this.debug(2, "directRunRPC: threads = " + threads + "; host = " + task.host);
 			var script = "/rpc/" + task.action + ".js";
-			if("home" != task.host) {
-				await this.ns.scp("/include/formatting.js", task.host, "home");
-				await this.ns.scp("/include/rpc.js", task.host, "home");
-				await this.ns.scp("/include/server.js", task.host, "home");
-				await this.ns.scp("/include/io.js", task.host, "home");
-				await this.ns.scp(script, task.host, "home");
-			}
+			await this.copyDependencies(script, task.host);
 			return this.ns.exec(script, task.host, threads, JSON.stringify(task));
 		}
 		return 0;
+	}
+
+	async copyDependencies(script, host) {
+		if("home" != host) {
+			await this.ns.scp("/include/formatting.js", host, "home");
+			await this.ns.scp("/include/rpc.js", host, "home");
+			await this.ns.scp("/include/server.js", host, "home");
+			await this.ns.scp("/include/io.js", host, "home");
+			if(this.dependencies.has(script)) {
+				const extra_deps = this.dependencies.get(script);
+				for(const dep of extra_deps[Symbol.iterator]()) {
+					await this.ns.scp(dep, host, "home");
+				}
+			}
+			await this.ns.scp(script, host, "home");
+		}
 	}
 
 	debug(level, string) {
@@ -450,6 +443,14 @@ function initialWaitingTasks() {
 		mcp_function: function(mcp, task) { add_kill_all_task(mcp); },
 	});
 	return tasks;
+}
+
+function setupDependencies() {
+	var handlers = new Map();
+	handlers.set("/rpc/analyze.js", ["/rpc/hack-threads.js"]);
+	handlers.set("/rpc/servers/hack.js", ["/rpc/hack-threads.js"]);
+	userMessageHandlers(handlers);
+	return handlers;
 }
 
 function setupMessageHandlers() {
@@ -583,13 +584,7 @@ function initializeNeededPortOpeners() {
 async function initRunScript(mcp, host, task, strip_message) {
 	if(task.action !== undefined) {
 		var script = "/rpc/" + task.action + ".js";
-		if("home" != host) {
-			await mcp.ns.scp("/include/formatting.js", host, "home");
-			await mcp.ns.scp("/include/rpc.js", host, "home");
-			await mcp.ns.scp("/include/server.js", host, "home");
-			await mcp.ns.scp("/include/io.js", host, "home");
-			await mcp.ns.scp(script, host, "home");
-		}
+		await mcp.copyDependencies(script, host);
 		var pid = mcp.ns.exec(script, host, 1, JSON.stringify(task));
 		if(0 == pid) {
 			mcp.ns.tprint("Cannot run script " + script + " on " + host);

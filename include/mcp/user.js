@@ -194,10 +194,10 @@ function analyze_server(mcp, rest) {
 		label: "Analyze servers",
 		action: "analyze",
 		hack_consts: mcp.hack_consts,
+		max_threads: mcp.servers.availableThreads(mcp.ns.getScriptRam("/rpc/weaken.js", "home")),
 	};
 	if(undefined !== target) {
 		task.target = target;
-		task.max_threads = mcp.servers.availableThreads(mcp.ns.getScriptRam("/rpc/weaken.js", "home"));
 	}
 	else {
 		task.targets = mcp.servers.hackable_servers;
@@ -236,14 +236,15 @@ function get_threads(mcp, rest, proper_name, name, action) {
 		mcp.ns.tprint("ERROR: " + target + " is not a valid hostname");
 		return;
 	}
+	const ram = mcp.ns.getScriptRam("/rpc/weaken.js", "home");
 	var task = mcp.createTask({
 		label: proper_name + " " + target,
 		action: action,
 		target: target,
 		hack_consts: mcp.hack_consts,
+		max_threads: mcp.servers.availableThreads(ram),
 	});
 	mcp.tasks.push(task);
-
 }
 
 async function hack_server(mcp, threads_task) {
@@ -258,6 +259,7 @@ async function hack_server(mcp, threads_task) {
 		target: target,
 		min_security: threads_task.min_security,
 		max_money: threads_task.max_money,
+		thread_data: threads_task.threads,
 	});
 	// Weaken and grow are the same size, and hack uses 50GB less memory. I
 	// use the larger value for all threads so that there aren't problems

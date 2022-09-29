@@ -49,7 +49,7 @@ export class Server {
 					var job = this.jobs.get(message.job_id);
 					this.debug(3, "tasksLoop: job = " + JSON.stringify(job));
 					if(undefined !== job) {
-						job.handleMessage(message);
+						await job.handleMessage(message);
 						if(job.done) {
 							if((!await job.cleanup()) || (!await job.start())) {
 								this.send(job.task);
@@ -142,9 +142,11 @@ class Job {
 		this.idle_pids = [];
 		this.task_queue = [];
 		this.message_queue = [];
+		this.finish = false;
 	}
 	get done() { return (0 == this.task_count); }
 	async start() {
+		this.message_queue = [];
 		if(undefined !== this.handler.setup_tasks) {
 			if(await this.handler.setup_tasks(this)) {
 				await this.runTasks();
@@ -172,12 +174,16 @@ class Job {
 		}
 		return false;
 	}
-	handleMessage(message) {
+	async handleMessage(message) {
 		if((undefined === message.type) || ("completed" == message.type)) {
 			this.message_queue.push(message);
 			this.finishedTask(message);
 			if(undefined !== this.handler.cleanup_task) {
-				return this.handler.cleanup_task(this, message);
+				const result = await this.handler.cleanup_task(this, message);
+				if(0 < this.task_queue.length) {
+					await this.runTasks();
+				}
+				if(!result) { this.finish = true; }
 			}
 			return true;
 		}
@@ -201,7 +207,6 @@ class Job {
 		this.addTasks(task, threads);
 	}
 	async runTasks() {
-		this.message_queue = [];
 		this.debug(2, "runTasks: task_queue = " + JSON.stringify(this.task_queue));
 		while(0 < this.task_queue.length) {
 			const task = this.task_queue.shift();
@@ -263,9 +268,7 @@ class MemoryPool {
 	constructor(ns, task) {
 		this.debug_level = 1;
 		this.ns = ns;
-		ns.print("Initializing MemoryPool from " + JSON.stringify(task));
 		this.hosts = new Map();
-		ns.print("Setting up memory from " + JSON.stringify(task.reserved));
 		for(var rec of task.reserved.hosts[Symbol.iterator]()) {
 			this.debug(2, "Adding " + rec.ram + "GB of RAM on server " + rec.host);
 			if(this.hosts.has(rec.host)) {
@@ -278,9 +281,9 @@ class MemoryPool {
 		}
 		// Permanently reserve memory used by this script.
 		this.uniqueID = 0;
-		this.debug(1, "Memory given to this server:");
+		ns.print("Memory given to this server:");
 		for(var [host, bucket] of this.hosts.entries()) {
-			this.debug(1, "  " + fmt.align_left(host, 18)
+			ns.print("  " + fmt.align_left(host, 18)
 				+ fmt.align_right(bucket.max_ram) + "GB"
 			);
 		}
@@ -368,7 +371,8 @@ class MemoryPool {
 	}
 
 	finishedTask(task) {
-		this.debug(1, "Performing finishedTask on task " + JSON.stringify(task));
+		this.debug(1, "Performing finishedTask on task #" + task.id + " for job #" + task.job_id + ": " + task.label);
+		this.debug(3, "finishedTask: task " + JSON.stringify(task));
 		if(task.id !== undefined) {
 			this.debug(2, "Releasing memory assigned to task #" + task.id + " from host " + task.host);
 			var host = this.hosts.get(task.host);
@@ -385,7 +389,7 @@ class MemoryPool {
 
 class MemoryBucket {
 	constructor(ram, hostname, pool) {
-		this.debug_level = 1;
+		this.debug_level = 0;
 		this.hostname = hostname;
 		this.pool = pool;
 		this.max_ram = ram;

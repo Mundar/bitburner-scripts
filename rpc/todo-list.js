@@ -27,9 +27,8 @@ export async function main(ns) {
 	// Manual Todo Tasks
 	ns.tprint("")
 	ns.tprint("Update memory allocation to use reserved space for user commands.")
-	ns.tprint("Write hack server");
 	ns.tprint("Write coding contract scripts");
-	
+
 	rpc.exit();
 }
 

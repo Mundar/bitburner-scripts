@@ -29,5 +29,6 @@ export async function main(ns) {
 		}
 	}
 
-	rpc.exit();
+	await rpc.exit();
 }
+

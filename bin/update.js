@@ -17,6 +17,7 @@ export async function main(ns) {
 	await getFile(ns, "/rpc/grow.js");
 	await getFile(ns, "/rpc/grow-threads.js");
 	await getFile(ns, "/rpc/hack.js");
+	await getFile(ns, "/rpc/hack-threads.js");
 	await getFile(ns, "/rpc/hack-constants.js");
 	await getFile(ns, "/rpc/infiltrate.js");
 	await getFile(ns, "/rpc/kill-all.js");
@@ -25,6 +26,7 @@ export async function main(ns) {
 	await getFile(ns, "/rpc/root-server.js");
 	await getFile(ns, "/rpc/server-details.js");
 	await getFile(ns, "/rpc/todo-list.js");
+	await getFile(ns, "/rpc/wait.js");
 	await getFile(ns, "/rpc/weaken-threads.js");
 	await getFile(ns, "/rpc/weaken.js");
 
