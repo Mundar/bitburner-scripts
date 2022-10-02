@@ -15,6 +15,7 @@ export async function main(ns) {
 		const money_per_sec_1000 = (host.max_money * host.hack_amount * host.hack_chance * host.bestimate_1000.hack_threads)
 			/ (host.max_time + 4000);
 		ns.tprint("Host: " + host.hostname);
+		ns.tprint("Current money: $" + fmt.commafy(ns.getServerMoneyAvailable(host.hostname), 0));
 		ns.tprint("Max money: $" + fmt.commafy(host.max_money, 0));
 		var notice = "";
 		if(host.cur_security > host.min_security) { notice = " (values based on current security)"; }

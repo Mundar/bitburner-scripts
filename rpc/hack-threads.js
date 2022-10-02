@@ -29,6 +29,12 @@ export async function main(ns) {
 	await rpc.exit();
 }
 
+function debug(ns, level, msg) {
+	if(level >= 1) {
+		ns.print(msg);
+	}
+}
+
 export function find_hack_threads(ns, host, max_threads) {
 	const max_count = Math.floor(host.max_time / 4000) - 1;
 	var start_estimate = default_hack_threads(ns, host);
@@ -51,7 +57,8 @@ export function find_hack_threads(ns, host, max_threads) {
 	var peak = estimate.hack_threads / estimate.total;
 	var peak_est = estimate;
 	var cur;
-	const limit = threads - 30;
+	var limit = threads - 30;
+	if(limit < 1) { limit = 1; }
 	const start_threads = threads;
 	for(; threads > limit; --threads) {
 		estimate = hgw_estimate_from_threads(ns, host, threads);
@@ -105,23 +112,23 @@ export function default_hack_threads(ns, host) {
 }
 
 export function hgw_estimate_from_threads(ns, host, input_threads) {
-	var debug = "";
 	var hack_threads = input_threads;
-	debug += "Getting HGW estimates for hack threads " + hack_threads + "\n";
+	if(hack_threads < 0) { hack_threads = 0; }
+	debug(ns, 1, "Getting HGW estimates for hack threads " + hack_threads + "\n");
 	var hack_actual_percent = hack_threads * host.hack_amount;
 	if(1 < hack_actual_percent) {
 		hack_threads = Math.floor(1.0 / host.hack_amount);
 		hack_actual_percent = hack_threads * host.hack_amount;
-		debug += "Limiting hack threads to " + hack_threads + "\n";
+		debug(ns, 1, "Limiting hack threads to " + hack_threads + "\n");
 	}
 	const hack_weaken_threads = Math.ceil(hack_threads*host.hack_sec/host.weaken_sec);
 	const grow_needed = 1 / (1 - hack_actual_percent);
-	debug += "Actual hack percentage/Growth percentage needed = " + (hack_actual_percent*100) + "%/" + (grow_needed*100) + "%\n";
+	debug(ns, 1, "Actual hack percentage/Growth percentage needed = " + (hack_actual_percent*100) + "%/" + (grow_needed*100) + "%\n");
 	const grow_threads = Math.ceil(ns.growthAnalyze(host.hostname, grow_needed));
 	const grow_weaken_threads = Math.ceil(grow_threads*host.grow_sec/host.weaken_sec);
 	const weaken_threads = hack_weaken_threads + grow_weaken_threads;
 	const total_threads = hack_threads + hack_weaken_threads + grow_threads + grow_weaken_threads;
-	debug += "Threads (total/hack/grow/weaken) = " + total_threads + "/" + hack_threads + "/" + grow_threads + "/" + weaken_threads+ "\n";
+	debug(ns, 1, "Threads (total/hack/grow/weaken) = " + total_threads + "/" + hack_threads + "/" + grow_threads + "/" + weaken_threads+ "\n");
 	return {
 		hack_amount: hack_actual_percent,
 		hack_threads: hack_threads,
@@ -130,7 +137,6 @@ export function hgw_estimate_from_threads(ns, host, input_threads) {
 		grow_weaken: grow_weaken_threads,
 		weaken_threads: weaken_threads,
 		total: total_threads,
-		debug: debug,
 	}
 }
 

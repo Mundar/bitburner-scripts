@@ -408,9 +408,10 @@ class MCP {
 	async copyDependencies(script, host) {
 		if("home" != host) {
 			await this.ns.scp("/include/formatting.js", host, "home");
+			await this.ns.scp("/include/io.js", host, "home");
 			await this.ns.scp("/include/rpc.js", host, "home");
 			await this.ns.scp("/include/server.js", host, "home");
-			await this.ns.scp("/include/io.js", host, "home");
+			await this.ns.scp("/include/task.js", host, "home");
 			if(this.dependencies.has(script)) {
 				const extra_deps = this.dependencies.get(script);
 				for(const dep of extra_deps[Symbol.iterator]()) {

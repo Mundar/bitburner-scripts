@@ -1,4 +1,6 @@
 /** @param {NS} ns */
+import {Task} from "/include/task.js";
+
 export class Servers {
 	constructor(ns, mcp) {
 		this.debug_level = 1;
@@ -64,6 +66,17 @@ export class Servers {
 		return false;
 	}
 
+	async reserveTask(task, requested_threads) {
+		this.debug(3, "reserveTask: ram = " + ram);
+		var my_task = new Task(this.ns, task);
+		const script = my_task.script;
+		if(undefined === script) { return false; }
+		this.debug(1, "my_task.data = " + JSON.stringify(my_task.data));
+		this.debug(1, "task = " + JSON.stringify(task));
+		const ram = ns.getScriptRam(script, "home");
+		return this.reserveMemory(ram, requested_threads, task);
+	}
+
 	availableThreads(ram) {
 		this.debug(1, "availableThreads: ram = " + ram);
 		var threads = 0;
@@ -82,6 +95,28 @@ export class Servers {
 		}
 		this.debug(1, "availbleThreads returning " + threads + " threads");
 		return threads;
+	}
+
+	async reserveServer(server_name, task) {
+		this.debug(2, "reserveServer: server_name = " + server_name
+			+ "; task = " + JSON.stringify(task));
+		if(undefined === task.reserved) {
+			task.reserved = {
+				total_ram: 0,
+				total_threads: 0,
+				hosts: [],
+			}
+		}
+		this.debug(3, "reserveMemory: task = " + JSON.stringify(task));
+		if("home" == server_name) { return false; }
+		var server = this.getServerData(server_name);
+		const req_ram = server.max_ram;
+		const free_mem = server.freeRam();
+		if(free_mem < req_ram) { return false; }
+		await server.reserveRam(task.id, req_ram);
+		task.reserved.total_ram += req_ram;
+		task.reserved.hosts.push({ host: server_name, ram: req_ram, threads: 0 });
+		return true;
 	}
 
 	updateServer(hostname, details) {
@@ -169,7 +204,7 @@ export class Servers {
 		this.unrooted_servers.sort((a, b) => b.level - a.level);
 		this.unported_servers.sort((a, b) => b.level - a.level);
 	}
-		
+
 	async finishedTask(task) {
 		if((task.reserved !== undefined)) {
 			for(var host of task.reserved.hosts[Symbol.iterator]()) {
@@ -227,7 +262,7 @@ export class Servers {
 			if((undefined !== remaining_threads) && (0 == remaining_threads)) { return true; }
 		}
 		if(undefined === remaining_threads) { return true; }
-		return false;		
+		return false;
 	}
 
 	debug(level, string) {
@@ -235,14 +270,6 @@ export class Servers {
 			this.ns.print("DEBUG: Servers: " + string);
 		}
 	}
-}
-
-function chooseHostFunction(servers, host, info, output) {
-	if(info.freeRam() >= script_ram) {
-		output = host;
-		return false;
-	}
-	return true;	
 }
 
 class ServerData {

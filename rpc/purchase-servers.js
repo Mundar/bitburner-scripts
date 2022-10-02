@@ -18,6 +18,8 @@ export async function main(ns) {
 			afford.ram = Math.round(afford.ram/2);
 			afford.cost = ns.getPurchasedServerCost(afford.ram);
 		}
+		ns.tprint("Purchased server limit = " + max_servers);
+		ns.tprint("Maximum purchased server RAM = " + fmt.commafy(max_ram, 0) + " GB");
 		ns.tprint("Purchased servers cost: (Money = $" + fmt.commafy(our_money, 2) + ")");
 		ns.tprint("Server RAM  Cost       Max");
 		ns.tprint("----------  ---------  ---");
@@ -26,7 +28,7 @@ export async function main(ns) {
 		var cur_cost = ns.getPurchasedServerCost(cur_ram);
 		while(((0 == lines) || (1 < cur_ram)) && ((max_servers*2) > (our_money/cur_cost))) {
 			var cur_max = Math.floor(our_money/cur_cost);
-			if(cur_max > max_servers) {cur_max = max_servers; }
+			if(cur_max > max_servers) { cur_max = max_servers; }
 			ns.tprint(fmt.align_right(cur_ram, 10)
 				+ fmt.align_right("$" + fmt.notation(cur_cost), 11)
 				+ fmt.align_right(cur_max, 5));
@@ -47,20 +49,21 @@ export async function main(ns) {
 			const server_cost = ns.getPurchasedServerCost(size);
 			var remaining = rpc.task.quantity;
 			var server_num = 1;
-			while(ns.serverExists("maeloch-" + server_num)) { server_num += 1; }
 			while((0 < remaining)
 				&& (server_num <= max_servers)
 				&& (ns.getServerMoneyAvailable("home") > server_cost))
 			{
 				const server_name = "maeloch-" + server_num;
-				ns.tprint("Purchasing server " + server_name + " for $"
-					+ fmt.commafy(server_cost));
-				ns.purchaseServer(server_name, size);
+				if(!ns.serverExists(server_name)) {
+					ns.tprint("Purchasing server " + server_name + " for $"
+						+ fmt.commafy(server_cost));
+					ns.purchaseServer(server_name, size);
+					remaining -= 1;
+				}
 				server_num += 1;
-				remaining -= 1;
 			}
 		}
 	}
 
-	rpc.exit();
+	await rpc.exit();
 }

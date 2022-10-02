@@ -9,11 +9,11 @@ export async function main(ns) {
 		var procs = ns.ps(host);
 		for(var proc of procs[Symbol.iterator]()) {
 			if((proc.filename.endsWith('mcp.js')) || (proc.filename.endsWith('kill-all.js'))) {
-				rpc.log("Skipping pid " + proc.pid + ": " + proc.filename);
+				await rpc.log("Skipping pid " + proc.pid + ": " + proc.filename);
 				ns.print("Skipping pid " + proc.pid + ": " + proc.filename);
 			}
 			else {
-				rpc.log("Killing pid " + proc.pid + ": " + proc.filename);
+				await rpc.log("Killing pid " + proc.pid + ": " + proc.filename);
 				ns.print("Killing pid " + proc.pid + ": " + proc.filename);
 				ns.kill(proc.pid);
 				killing_pids.push(proc.pid);
@@ -31,4 +31,3 @@ export async function main(ns) {
 
 	await rpc.exit();
 }
-

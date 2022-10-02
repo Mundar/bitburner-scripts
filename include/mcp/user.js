@@ -6,9 +6,11 @@ export function setupUserHandlers() {
 	handlers.set("analyze", function(mcp, rest) { analyze_server(mcp, rest); } );
 	handlers.set("buy", function(mcp, rest) { buy_servers(mcp, rest); } );
 	handlers.set("corp", function(mcp, rest) { corporation_service(mcp, rest); } );
+	handlers.set("delete", function(mcp, rest) { delete_server(mcp, rest); } );
 	handlers.set("find", function(mcp, rest) { find_server(mcp, rest); } );
 	handlers.set("grow", function(mcp, rest) { get_threads(mcp, rest, "Grow", "grow", "grow-threads"); } );
 	handlers.set("hack", function(mcp, rest) { get_threads(mcp, rest, "Hack", "hack", "hack-threads"); } );
+	handlers.set("hgw", function(mcp, rest) { hack_grow_weaken_server(mcp, rest); } );
 	handlers.set("help", function(mcp, rest) { help_handler(mcp, rest); } );
 	handlers.set("infiltrate", function(mcp, rest) { view_infiltrate(mcp, rest); } );
 	handlers.set("list", function(mcp, rest) { list_servers(mcp, rest); } );
@@ -31,6 +33,7 @@ function help_handler(mcp, rest) {
 		mcp.ns.tprint("  analyze     Analyze servers for profitability");
 		mcp.ns.tprint("  buy         Access the purchase server interface");
 		mcp.ns.tprint("  corp        Corporation service")
+		mcp.ns.tprint("  delete      Delete purchased server");
 		mcp.ns.tprint("  find        Find path to server");
 		mcp.ns.tprint("  grow        Grow server")
 		mcp.ns.tprint("  hack        Hack server")
@@ -184,6 +187,29 @@ function buy_servers(mcp, rest) {
 	mcp.tasks.push(mcp.createTask(task));
 }
 
+function delete_server(mcp, rest) {
+	var server_num = rest.shift();
+	if(undefined === server_num) {
+		mcp.ns.tprint("USAGE: mcp delete [number]");
+		return;
+	}
+	const server_name = "maeloch-" + server_num;
+	var task = {
+		label: "Delete " + server_name,
+		action: "delete-server",
+		server_num: server_num,
+	};
+	mcp.servers.reserveTask(task, 1);
+	if(mcp.servers.reserveServer(server_name, task)) {
+		mcp.servers.server_data.delete(server_name);
+		mcp.tasks.push(mcp.createTask(task));
+	}
+	else {
+		mcp.ns.tprint("Unable to delete " + server_name + " because it is being used.");
+		mcp.finishedTask(task);
+	}
+}
+
 function display_todo(mcp, rest) {
 	mcp.tasks.push(mcp.createTask("Display todo list", "todo-list"));
 }
@@ -223,6 +249,23 @@ async function corporation_service(mcp, rest) {
 		rest: rest,
 	});
 	mcp.debug(2, "Corporation service task = " + JSON.stringify(task));
+	mcp.tasks.push(task);
+}
+
+async function hack_grow_weaken_server(mcp, rest) {
+	var command = rest.shift();
+	if(undefined === command) {
+		mcp.ns.tprint("USAGE: mcp hgw [command] <...>");
+		return;
+	}
+	var task = mcp.createTask({
+		label: "Hack/Grow/Weaken server",
+		server: "hack",
+		server_port: 19,
+		command: command,
+		rest: rest,
+	});
+	mcp.debug(2, "Hack/Grow/Weaken server task = " + JSON.stringify(task));
 	mcp.tasks.push(task);
 }
 

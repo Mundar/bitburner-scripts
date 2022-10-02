@@ -185,13 +185,13 @@ function run_hack_tasks(job) {
 	const target = job.task.target;
 	const grow_weaken_time = job.ns.getWeakenTime(target);	// The grow weaken should happen last.
 	job.ns.print("Grow weaken time = " + job.ns.tFormat(grow_weaken_time));
-	var max_time = grow_weaken_time + 2000;
-	const grow_time = job.ns.getGrowTime(target) + 1000;	// Grow should finish 1 second before the grow weaken
+	var max_time = grow_weaken_time + 1600;
+	const grow_time = job.ns.getGrowTime(target) + 800;	// Grow should finish 1 second before the grow weaken
 	job.ns.print("Grow time = " + job.ns.tFormat(grow_time));
 	if(grow_time > max_time) { max_time = grow_time; }
-	const hack_weaken_time = grow_weaken_time + 2000;		// The hack weaken should happen 1 second before the grow.
+	const hack_weaken_time = grow_weaken_time + 1600;		// The hack weaken should happen 1 second before the grow.
 	job.ns.print("Hack weaken time = " + job.ns.tFormat(hack_weaken_time));
-	const hack_time = job.ns.getHackTime(target) + 3000;	// Hack should finish 1 second before the hack weaken
+	const hack_time = job.ns.getHackTime(target) + 2400;	// Hack should finish 1 second before the hack weaken
 	job.ns.print("Hack time = " + job.ns.tFormat(hack_time));
 	if(hack_time > max_time) { max_time = hack_time; }
 	// Create the hack task. . .
@@ -219,7 +219,7 @@ function run_hack_tasks(job) {
 		job.ns.print("Grow-weaken task = " + JSON.stringify(grow_weaken_task));
 		job.addTasks(grow_weaken_task, job.task.thread_data.grow_weaken - 1);
 	}
-	var last_grow_weaken_task = get_weaken_task(job, grow_weaken_delay + 500);
+	var last_grow_weaken_task = get_weaken_task(job, grow_weaken_delay + 600);
 	last_grow_weaken_task.label = "Last weaken " + target + " after Grow";
 	last_grow_weaken_task.add_new_hack = true;
 	job.ns.print("Last grow-weaken task = " + JSON.stringify(last_grow_weaken_task));
@@ -243,7 +243,18 @@ function cleanup_hack_task(job, message) {
 
 	if((!job.finish) && (undefined !== message.add_new_hack) && (true == message.add_new_hack)) {
 		job.ns.print("Detected add new task flag");
-		run_hack_tasks(job);
+		const max_money = job.task.max_money;
+		const cur_money = job.ns.getServerMoneyAvailable(job.task.target);
+		if(cur_money < max_money) {
+			job.ns.print("Reset of hack didn't recover all of the money of " + job.task.target + ": $" + fmt.notation(cur_money) + " > $" + fmt.notation(max_money));
+			if(cur_money < (max_money*3/4)) {
+				job.ns.print("Triggering reset of hack of " + job.task.target + ": $" + fmt.notation(cur_money) + " > $" + fmt.notation(max_money));
+				job.task.reset = true;
+			}
+		}
+		if(((undefined === job.task.reset) || (false == job.task.reset)) && (!job.finish)) {
+			run_hack_tasks(job);
+		}
 	}
 	return true;
 }
@@ -251,6 +262,7 @@ function cleanup_hack_task(job, message) {
 function cleanup_hack_tasks(job) {
 	const target = job.task.target;
 	var index = 0;
+	job.task.reset = false;
 	while(job.hasMessage()) {
 		job.ns.print("Message[" + index + "] = " + JSON.stringify(job.getMessage()));
 		index++;

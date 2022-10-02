@@ -14,25 +14,28 @@ export class Server {
 		if((undefined !== this.task.ports) && (Array.isArray(this.task.ports))) {
 			this.ports = [].concat(this.task.ports);
 		}
-		if(this.task.server_port === undefined) {
-			this.log("ERROR: Server task doesn't have a defined port number.");
-			this.exit();
-			ns.exit();
-		}
 		this.port = this.task.server_port;
 		this.io = new IO(ns, this.port);
 		this.jobs = new Map();
-		if(this.task.job !== undefined) {
-			this.io.sendToSelf(this.task);
-		}
-		else {
-			this.log("ERROR: Server needs at least one job assigned");
-			this.exit();
-			ns.exit();
-		}
 		this.message_queue = [];
 		this.job_handlers = new Map();
 		this.idle_action = "hack-exp";
+		this.wake_time = Server.defaultWakeTime(ns.getTimeSinceLastAug());
+		this.tasks = [];
+		this.commands = new Map();
+		this.commands.set("debug", function(service, message) { service.displayDebug(); });
+		this.commands.set("finish", function(service, message) { service.finishCommand(message); });
+		this.commands.set("jobs", function(service, message) { service.displayJobs(); });
+		//this.commands.set("quit", function(service, message) { service.not_done = false; });
+		this.commands.set("tail", function(service, message) { service.ns.tail(); });
+		if((this.task.job !== undefined) || (this.task.command !== undefined)) {
+			this.io.sendToSelf(this.task);
+		}
+	}
+	get not_done() {
+		return (0 < this.jobs.size)
+		|| (this.ns.getTimeSinceLastAug() < this.wake_time)
+		|| (this.io.messageAvailable());
 	}
 	async tasksLoop() {
 		var disabled_sleep_log = false;
@@ -40,7 +43,8 @@ export class Server {
 			this.ns.disableLog("sleep");
 			disabled_sleep_log = true;
 		}
-		while((0 < this.jobs.size) || (this.io.messageAvailable())) {
+		while(this.not_done) {
+			var sleep_length = 50;
 			if(this.io.messageAvailable()) {
 				var message = this.io.getMessage();
 				this.debug(3, "tasksLoop: Received message: " + JSON.stringify(message));
@@ -60,8 +64,8 @@ export class Server {
 				}
 				else {
 					if(undefined !== message.job) {
-						this.debug(1, "tasksLoop: Adding new job")
-						this.debug(3, "tasksLoop: message = " + JSON.stringify(message))
+						this.debug(1, "tasksLoop: Adding new job");
+						this.debug(3, "tasksLoop: message = " + JSON.stringify(message));
 						var job = new Job(this, message.job);
 						if(this.job_handlers.has(message.job.action)) {
 							this.debug(3, "tasksLoop: Adding new job with action " + message.job.action);
@@ -82,18 +86,118 @@ export class Server {
 							this.send(job.task);
 						}
 					}
+					else if(undefined !== message.command) {
+						const command = message.command;
+						this.debug(1, "tasksLoop: Received " + command + " command");
+						this.debug(3, "tasksLoop: message = " + JSON.stringify(message));
+						if(this.commands.has(command)) {
+							const func = this.commands.get(command);
+							func(this, message);
+						}
+						else {
+							this.ns.print("Command " + command + " not supported");
+						}
+					}
 					else {
 						this.ns.print("ERROR: Received unsuported message: " + JSON.stringify(message));
 					}
 				}
 			}
-			await this.ns.sleep(50);
+			else if(this.ns.getTimeSinceLastAug() >= this.wake_time) {
+				const now = this.ns.getTimeSinceLastAug();
+				if(now >= this.wake_time) {
+					while((0 < this.tasks.length) && (now > this.tasks.at(-1).time)) {
+						const entry = this.tasks.pop();
+						entry.func(this, entry.data);
+					}
+					if(0 < this.tasks.length) {
+						this.wake_time = this.tasks.at(-1).time;
+					}
+					else {
+						this.wake_time = Service.defaultWakeTime(now);
+					}
+				}
+				if(sleep_length > (this.wake_time - now)) {
+					sleep_length = this.wake_time - now;
+				}
+			}
+			await this.ns.sleep(sleep_length);
 		}
 		if(disabled_sleep_log) { this.ns.enableLog("sleep"); }
 	}
 	addJobHandler(name, handlers) {
 		this.job_handlers.set(name, handlers);
 	}
+	addCommand(name, func) {
+		this.commands.set(name, func);
+	}
+	addTask(func, data, delay) {
+		var time = this.ns.getTimeSinceLastAug();
+		if(undefined !== delay) { time += delay; }
+		if(time < this.wake_time) { this.wake_time = time; }
+		this.tasks.push({ time: time, func: func, data: data });
+		this.tasks.sort((a,b) => b.time - a.time);
+	}
+	addPreciseTask(func, data, time) {
+		if(time < this.wake_time) { this.wake_time = time; }
+		this.tasks.push({ time: time, func: func, data: data });
+		this.tasks.sort((a,b) => b.time - a.time);
+	}
+	displayJobs() {
+		this.ns.tprint("Job ID Action    Description");
+		this.ns.tprint("------ --------- ----------------------------------------");
+		for(const job of this.jobs.values()) {
+			this.ns.tprint(
+				fmt.align_right(job.task.id, 6) + " "
+				+ fmt.align_left(job.task.action, 10)
+				+ job.task.label
+			);
+		}
+	}
+	finishCommand(message) {
+		const param = message.rest.shift();
+		if(undefined === param) {
+			this.ns.tprint("USAGE: mcp [command] finish [job ID]");
+		}
+		else {
+			const job_id = Number.parseInt(param);
+			var job = this.jobs.get(job_id);
+			if(undefined !== job) {
+				job.finish = true;
+			}
+			else {
+				this.ns.tprint("Failed to find job with ID " + job_id);
+			}
+		}
+	}
+	displayDebug() {
+		const now = this.ns.getTimeSinceLastAug();
+		this.ns.tprint("debug_level = " + this.debug_level);
+		this.ns.tprint("now = " + now);
+		this.ns.tprint("wake_time = " + this.wake_time + " (" + this.ns.tFormat(this.wake_time - now) + ")");
+		this.ns.tprint("not_done = " + this.not_done);
+		this.ns.tprint("job_handlers = " + JSON.stringify(Array.from(this.job_handlers.keys())));
+		this.ns.tprint("Job ID Action    Description");
+		this.ns.tprint("------ --------- ----------------------------------------");
+		for(const job of this.jobs.values()) {
+			this.ns.tprint(
+				fmt.align_right(job.task.id, 6) + " "
+				+ fmt.align_left(job.task.action, 10)
+				+ job.task.label
+			);
+		}
+		this.ns.tprint("commands = [" + Array.from(this.commands.keys()).join(', ') + "]");
+		var times = [];
+		for(const entry of this.tasks[Symbol.iterator]()) {
+			times.push(entry.time - now);
+		}
+		this.ns.tprint("task times = [" + times.join(', ') + "]");
+		this.ns.tprint("task = " + JSON.stringify(this.task));
+	}
+	static defaultWakeTime(now) {
+		return now + (60*1000);
+	}
+
 	hasMessage() {
 		return (0 < this.message_queue.length);
 	}
@@ -170,13 +274,12 @@ class Job {
 			}
 		}
 		if(undefined !== this.handler.cleanup_tasks) {
-			return await this.handler.cleanup_tasks(this);
+			return ((await this.handler.cleanup_tasks(this)) && (!this.finish));
 		}
 		return false;
 	}
 	async handleMessage(message) {
 		if((undefined === message.type) || ("completed" == message.type)) {
-			this.message_queue.push(message);
 			this.finishedTask(message);
 			if(undefined !== this.handler.cleanup_task) {
 				const result = await this.handler.cleanup_task(this, message);
@@ -184,6 +287,9 @@ class Job {
 					await this.runTasks();
 				}
 				if(!result) { this.finish = true; }
+			}
+			else {
+				this.message_queue.push(message);
 			}
 			return true;
 		}
@@ -485,7 +591,7 @@ export class Service {
 					this.debug(3, "message = " + JSON.stringify(message))
 					if(this.commands.has(command)) {
 						const func = this.commands.get(command);
-						func(this, command);
+						func(this, message);
 					}
 					else {
 						this.ns.print("Command " + command + " not supported");
@@ -522,6 +628,13 @@ export class Service {
 		this.commands.set(name, func);
 	}
 	addTask(func, data, delay) {
+		var time = this.ns.getTimeSinceLastAug();
+		if(undefined !== delay) { time += delay; }
+		if(time < this.wake_time) { this.wake_time = time; }
+		this.tasks.push({ time: time, func: func, data: data });
+		this.tasks.sort((a,b) => b.time - a.time);
+	}
+	addPreciseTask(func, data, time) {
 		var time = this.ns.getTimeSinceLastAug();
 		if(undefined !== delay) { time += delay; }
 		if(time < this.wake_time) { this.wake_time = time; }

@@ -8,11 +8,13 @@ export async function main(ns) {
 	await getFile(ns, "/include/io.js");
 	await getFile(ns, "/include/rpc.js");
 	await getFile(ns, "/include/server.js");
+	await getFile(ns, "/include/task.js");
 
 	await getFile(ns, "/include/mcp/servers.js");
 	await getFile(ns, "/include/mcp/user.js");
 
 	await getFile(ns, "/rpc/analyze.js");
+	await getFile(ns, "/rpc/delete-server.js");
 	await getFile(ns, "/rpc/get-all-servers.js");
 	await getFile(ns, "/rpc/grow.js");
 	await getFile(ns, "/rpc/grow-threads.js");
