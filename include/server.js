@@ -147,10 +147,15 @@ export class Server {
 		this.ns.tprint("Job ID Action    Description");
 		this.ns.tprint("------ --------- ----------------------------------------");
 		for(const job of this.jobs.values()) {
+			var finish = "";
+			if(job.finish) {
+				finish = " (finishing: " + job.task_count + " tasks remaining)"
+			}
 			this.ns.tprint(
 				fmt.align_right(job.task.id, 6) + " "
 				+ fmt.align_left(job.task.action, 10)
 				+ job.task.label
+				+ finish
 			);
 		}
 	}
@@ -580,6 +585,7 @@ export class Service {
 			this.ns.disableLog("sleep");
 			disabled_sleep_log = true;
 		}
+		var sleep_count = 50;
 		while(this.not_done) {
 			var sleep_length = 100;
 			if(this.io.messageAvailable()) {
@@ -619,8 +625,18 @@ export class Service {
 				if(sleep_length > (this.wake_time - now)) {
 					sleep_length = this.wake_time - now;
 				}
+				await this.ns.sleep(sleep_length);
+				sleep_count = 50;
 			}
-			await this.ns.sleep(sleep_length);
+			else {
+				await this.ns.sleep(sleep_length);
+				sleep_count = 50;
+			}
+			sleep_count -= 1;
+			if(0 >= sleep_count) {
+				await this.ns.sleep(sleep_length);
+				sleep_count = 50;
+			}
 		}
 		if(disabled_sleep_log) { this.ns.enableLog("sleep"); }
 	}

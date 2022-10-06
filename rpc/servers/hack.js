@@ -25,6 +25,9 @@ export async function main(ns) {
 		cleanup_tasks: function(job) { return cleanup_hack_tasks(job); },
 	});
 
+	cp.addCommand("status", function(srv, msg) { job_status(srv, msg); });
+	cp.addCommand("details", function(srv, msg) { job_details(srv, msg); });
+
 	await cp.tasksLoop();
 
 	await cp.exit();
@@ -79,6 +82,7 @@ function cleanup_weaken_tasks(job) {
 		return true;
 	}
 	else {
+		job.ns.tprint("Finished weakening " + target);
 		job.ns.toast("Finished weakening " + target, "success", 10000);
 		return false;
 	}
@@ -113,7 +117,8 @@ function setup_grow_tasks(job) {
 	var grow_task = get_grow_task(job, grow_delay);
 	job.ns.print("Grow task = " + JSON.stringify(grow_task));
 	const max_money = job.task.max_money;
-	const cur_money = job.ns.getServerMoneyAvailable(target);
+	var cur_money = job.ns.getServerMoneyAvailable(target);
+	if(0 == cur_money) { cur_money = 1; }
 	var grow_threads = Math.ceil(job.ns.growthAnalyze(target, max_money / cur_money));
 	job.ns.print("Grow threads = " + grow_threads);
 	const sec_per_weaken = job.server.task.hack_consts.sec_per_weaken[0];
@@ -151,7 +156,7 @@ function cleanup_grow_tasks(job) {
 		return true;
 	}
 	else {
-		job.ns.print("Finished growing " + target);
+		job.ns.tprint("Finished growing " + target);
 		job.ns.toast("Finished growing " + target, "success", 10000);
 		return false;
 	}
@@ -268,5 +273,42 @@ function cleanup_hack_tasks(job) {
 		index++;
 	}
 
+	if(job.finish) {
+		job.ns.tprint("Finished hacking " + target);
+		job.ns.toast("Finished hacking " + target, "success", 10000);
+		return false;
+	}
+	else {
+		return true;
+	}
+
 	return !job.finish;
+}
+
+function job_status(srv, msg) {
+	const param = msg.rest.shift();
+	if(undefined !== param) {
+		const job_id = Number.parseInt(param);
+		const job = srv.jobs.get(job_id);
+		if(undefined !== job) {
+			srv.ns.tprint("task = " + JSON.stringify(job.task));
+		}
+	}
+	else {
+		srv.displayJobs();
+	}
+}
+
+function job_details(srv, msg) {
+	const param = msg.rest.shift();
+	if(undefined !== param) {
+		const job_id = Number.parseInt(param);
+		const job = srv.jobs.get(job_id);
+		if(undefined !== job) {
+			srv.ns.tprint("job = " + JSON.stringify(job));
+		}
+	}
+	else {
+		srv.displayJobs();
+	}
 }

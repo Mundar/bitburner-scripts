@@ -5,12 +5,13 @@ export function setupUserHandlers() {
 	var handlers = new Map();
 	handlers.set("analyze", function(mcp, rest) { analyze_server(mcp, rest); } );
 	handlers.set("buy", function(mcp, rest) { buy_servers(mcp, rest); } );
-	handlers.set("corp", function(mcp, rest) { corporation_service(mcp, rest); } );
+	handlers.set("corp", add_service_command("Corporation service", "corporation", 18, "corp"));
 	handlers.set("delete", function(mcp, rest) { delete_server(mcp, rest); } );
+	handlers.set("favor", add_action_command("Favor calculations", "favor", "corp"));
 	handlers.set("find", function(mcp, rest) { find_server(mcp, rest); } );
 	handlers.set("grow", function(mcp, rest) { get_threads(mcp, rest, "Grow", "grow", "grow-threads"); } );
 	handlers.set("hack", function(mcp, rest) { get_threads(mcp, rest, "Hack", "hack", "hack-threads"); } );
-	handlers.set("hgw", function(mcp, rest) { hack_grow_weaken_server(mcp, rest); } );
+	handlers.set("hgw", add_server_command("Hack/Grow/Weaken server", "hack", 19, "hgw"));
 	handlers.set("help", function(mcp, rest) { help_handler(mcp, rest); } );
 	handlers.set("infiltrate", function(mcp, rest) { view_infiltrate(mcp, rest); } );
 	handlers.set("list", function(mcp, rest) { list_servers(mcp, rest); } );
@@ -34,6 +35,7 @@ function help_handler(mcp, rest) {
 		mcp.ns.tprint("  buy         Access the purchase server interface");
 		mcp.ns.tprint("  corp        Corporation service")
 		mcp.ns.tprint("  delete      Delete purchased server");
+		mcp.ns.tprint("  favor       Perform favor calculations");
 		mcp.ns.tprint("  find        Find path to server");
 		mcp.ns.tprint("  grow        Grow server")
 		mcp.ns.tprint("  hack        Hack server")
@@ -138,14 +140,14 @@ function display_status(mcp, rest) {
 	}
 	if(options.has("memory")) {
 		mcp.ns.tprint("Memory:");
-		mcp.ns.tprint("  Host                 Max RAM     Free RAM     Free Idle")
-		mcp.ns.tprint("  -------------------- ----------- ------------ ------------")
+		mcp.ns.tprint("  Host                 Max RAM       Free RAM         Free Idle")
+		mcp.ns.tprint("  -------------------- ------------- ---------------- ----------------")
 		for(var host of mcp.servers.useful_servers[Symbol.iterator]()) {
 			const data = mcp.servers.getServerData(host);
 			mcp.ns.tprint("  " + fmt.align_left(host, 20)
-				+ fmt.align_right(fmt.commafy(data.max_ram, 0), 12)
-				+ fmt.align_right(fmt.commafy(data.freeRam(), 2), 13)
-				+ fmt.align_right(fmt.commafy(data.freeIdleRam(), 2), 13)
+				+ fmt.align_right(fmt.commafy(data.max_ram, 0), 14)
+				+ fmt.align_right(fmt.commafy(data.freeRam(), 2), 17)
+				+ fmt.align_right(fmt.commafy(data.freeIdleRam(), 2), 17)
 			);
 		}
 	}
@@ -235,37 +237,71 @@ function view_infiltrate(mcp, rest) {
 	mcp.tasks.push(mcp.createTask("Display infiltration data", "infiltrate"));
 }
 
-async function corporation_service(mcp, rest) {
+function add_action_command(label, action, cmd) {
+	return function(mcp, rest) { action_command(mcp, rest, label, action, cmd); }
+}
+
+function action_command(mcp, rest, label, action, cmd) {
 	var command = rest.shift();
-	if(undefined === command) {
-		mcp.ns.tprint("USAGE: mcp corp [command] <...>");
-		return;
-	}
 	var task = mcp.createTask({
-		label: "Corporation service",
-		service: "corporation",
-		service_port: 18,
+		label: label,
+		action: action,
 		command: command,
 		rest: rest,
 	});
-	mcp.debug(2, "Corporation service task = " + JSON.stringify(task));
+	mcp.debug(2, label + " task = " + JSON.stringify(task));
 	mcp.tasks.push(task);
 }
 
-async function hack_grow_weaken_server(mcp, rest) {
+function add_service_command(label, service, port, cmd) {
+	return function(mcp, rest) { service_command(mcp, rest, label, service, port, cmd); }
+}
+
+function service_command(mcp, rest, label, service, port, cmd) {
 	var command = rest.shift();
 	if(undefined === command) {
-		mcp.ns.tprint("USAGE: mcp hgw [command] <...>");
+		if(undefined === cmd) {
+			mcp.ns.tprint("USAGE: mcp " + service + " [command] <...>");
+		}
+		else {
+			mcp.ns.tprint("USAGE: mcp " + cmd + " [command] <...>");
+		}
 		return;
 	}
 	var task = mcp.createTask({
-		label: "Hack/Grow/Weaken server",
-		server: "hack",
-		server_port: 19,
+		label: label,
+		service: service,
+		service_port: port,
 		command: command,
 		rest: rest,
 	});
-	mcp.debug(2, "Hack/Grow/Weaken server task = " + JSON.stringify(task));
+	mcp.debug(2, label + " task = " + JSON.stringify(task));
+	mcp.tasks.push(task);
+}
+
+function add_server_command(label, server, port, cmd) {
+	return function(mcp, rest) { server_command(mcp, rest, label, server, port, cmd); }
+}
+
+function server_command(mcp, rest, label, server, port, cmd) {
+	var command = rest.shift();
+	if(undefined === command) {
+		if(undefined === cmd) {
+			mcp.ns.tprint("USAGE: mcp " + server + " [command] <...>");
+		}
+		else {
+			mcp.ns.tprint("USAGE: mcp " + cmd + " [command] <...>");
+		}
+		return;
+	}
+	var task = mcp.createTask({
+		label: label,
+		service: server,
+		service_port: port,
+		command: command,
+		rest: rest,
+	});
+	mcp.debug(2, label + " task = " + JSON.stringify(task));
 	mcp.tasks.push(task);
 }
 
@@ -287,6 +323,10 @@ function get_threads(mcp, rest, proper_name, name, action) {
 		hack_consts: mcp.hack_consts,
 		max_threads: mcp.servers.availableThreads(ram),
 	});
+	const opt_percnt = rest.shift();
+	if(undefined !== opt_percnt) {
+		task.hack_target_percent = opt_percnt;
+	}
 	mcp.tasks.push(task);
 }
 

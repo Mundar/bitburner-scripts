@@ -95,6 +95,7 @@ export async function main(ns) {
 			const money_max_efficiency = (host.max_money * host.hack_amount
 				* host.hack_chance * host.max_efficiency.efficiency * 1000)
 				/ (host.max_time + 4000);
+			ns.print("max_threads = " + rpc.task.max_threads);
 			const hack_data = ht.find_hack_threads(ns, host, rpc.task.max_threads);
 			const hack_money_est =(hack_data.hack_threads * hack_data.count
 				* host.hack_chance * host.hack_amount * host.max_money)

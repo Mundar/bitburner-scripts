@@ -27,6 +27,7 @@ function buy_sell_shares(s, data) {
 	const issued_shares = corporation.issuedShares;
 	const share_price = corporation.sharePrice;
 	var sleep_time = 60000;
+	/*
 	if(0 == issued_shares) {
 		// We bought all shares back and set dividend to 5% to raise the stock price.
 		const cooldown = corporation.shareSaleCooldown;
@@ -45,7 +46,7 @@ function buy_sell_shares(s, data) {
 			s.ns.print("Share price changed from $" + fmt.decimal(price_before, 3) + " to $" + fmt.decimal(price_after, 3));
 		}
 	}
-	else if(owned_shares > issued_shares) {
+	else */ if(owned_shares > issued_shares) {
 		s.task.min_share_price = undefined;
 		if(undefined === s.task.max_share_price) {
 			s.ns.toast("Initial share price is $" + fmt.decimal(share_price, 3), "info", 10000);
