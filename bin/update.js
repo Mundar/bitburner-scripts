@@ -15,6 +15,7 @@ export async function main(ns) {
 
 	await getFile(ns, "/rpc/analyze.js");
 	await getFile(ns, "/rpc/delete-server.js");
+	await getFile(ns, "/rpc/favor.js");
 	await getFile(ns, "/rpc/get-all-servers.js");
 	await getFile(ns, "/rpc/grow.js");
 	await getFile(ns, "/rpc/grow-threads.js");
