@@ -36,7 +36,8 @@ function debug(ns, level, msg) {
 }
 
 export function find_hack_threads(ns, host, max_threads) {
-	const max_count = Math.floor(host.max_time / 4000) - 1;
+	var max_count = Math.floor(host.max_time / 4000) - 1;
+	if(1 > max_count) { max_count = 1; }
 	var start_estimate = default_hack_threads(ns, host);
 	debug(ns, 1, "start_estimate = " + start_estimate);
 	if(start_estimate.total < max_threads) {

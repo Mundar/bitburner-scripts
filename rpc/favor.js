@@ -8,8 +8,10 @@ export async function main(ns) {
 	if(undefined === rpc.task.command) {
 		ns.tprint("USAGE: mcp favor [command] <...>");
 		ns.tprint("  Commands:");
-		ns.tprint("    for [favor]           Display the reputation needed for specified favor");
-		ns.tprint("    diff [favor] [favor]  Display the reputation needed between specified favors");
+		ns.tprint("    for [favor]                             Display the reputation needed for specified favor");
+		ns.tprint("    diff [favor] [favor]                    Display the reputation needed between specified favors");
+		ns.tprint("    target-favor [favor] [steps]            Display the most efficient way to get to a specific favor");
+		ns.tprint("    target-reputation [reputation] [steps]  Display the most efficient way to get to a specific reputation");
 	}
 	else if("diff" == rpc.task.command) {
 		const cur_favor = Number.parseInt(rpc.task.rest.shift());

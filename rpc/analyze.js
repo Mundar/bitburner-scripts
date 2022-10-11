@@ -12,8 +12,6 @@ export async function main(ns) {
 		const server = ns.getServer(hostname);
 		const cores = server.cpuCores;
 		var host = host_analyze(rpc, target);
-		const money_per_sec_1000 = (host.max_money * host.hack_amount * host.hack_chance * host.bestimate_1000.hack_threads)
-			/ (host.max_time + 4000);
 		ns.tprint("Host: " + host.hostname);
 		ns.tprint("Current money: $" + fmt.commafy(ns.getServerMoneyAvailable(host.hostname), 0));
 		ns.tprint("Max money: $" + fmt.commafy(host.max_money, 0));
@@ -89,12 +87,6 @@ export async function main(ns) {
 		rpc.task.analysis = [];
 		for(var hostname of rpc.task.targets[Symbol.iterator]()) {
 			var host = host_analyze(rpc, hostname);
-			const money_per_sec_1000 = (host.max_money * host.hack_amount
-				* host.hack_chance * host.bestimate_1000.hack_threads)
-				/ (host.max_time + 4000);
-			const money_max_efficiency = (host.max_money * host.hack_amount
-				* host.hack_chance * host.max_efficiency.efficiency * 1000)
-				/ (host.max_time + 4000);
 			ns.print("max_threads = " + rpc.task.max_threads);
 			const hack_data = ht.find_hack_threads(ns, host, rpc.task.max_threads);
 			const hack_money_est =(hack_data.hack_threads * hack_data.count
@@ -108,10 +100,6 @@ export async function main(ns) {
 				+ fmt.align_right(fmt.decimal(host.hack_amount * 100, 6), 10) + "%"
 				+ fmt.align_right(fmt.time(host.max_time), 12)
 				+ fmt.align_right(fmt.notation(host.max_money), 9)
-				+ fmt.align_right(host.bestimate_1000.hack_threads, 5)
-				+ fmt.align_right(fmt.notation(money_per_sec_1000), 9)
-				+ fmt.align_right(Math.round(host.max_efficiency.efficiency*1000), 5)
-				+ fmt.align_right(fmt.notation(money_max_efficiency), 9)
 				+ fmt.align_right(hack_data.hack_threads, 5)
 				+ fmt.align_right(hack_data.count, 4)
 				+ fmt.align_right(hack_data.hack_threads * hack_data.count, 6)
@@ -126,8 +114,6 @@ export async function main(ns) {
 
 function host_analyze(rpc, hostname) {
 	var host = ht.host_analyze(rpc, hostname);
-	host.max_efficiency = get_hgw_max_efficiency(rpc.ns, host);
-	host.bestimate_1000 = get_hgw_bestimate(rpc.ns, host, 1000);
 	return host;
 }
 

@@ -296,8 +296,8 @@ function server_command(mcp, rest, label, server, port, cmd) {
 	}
 	var task = mcp.createTask({
 		label: label,
-		service: server,
-		service_port: port,
+		server: server,
+		server_port: port,
 		command: command,
 		rest: rest,
 	});
