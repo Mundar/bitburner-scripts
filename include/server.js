@@ -4,7 +4,7 @@ import * as fmt from "/include/formatting.js";
 
 export class Server {
 	constructor(ns) {
-		this.debug_level = 1;
+		this.debug_level = 0;
 		this.ns = ns;
 		this.task = JSON.parse(ns.args[0]);
 		this.ports = [20];
@@ -239,7 +239,7 @@ export class Server {
 
 class Job {
 	constructor(server, job) {
-		this.debug_level = 1;
+		this.debug_level = 0;
 		this.ns = server.ns;
 		this.server = server;
 		this.task = job;
@@ -377,7 +377,7 @@ class Job {
 
 class MemoryPool {
 	constructor(ns, task) {
-		this.debug_level = 1;
+		this.debug_level = 0;
 		this.ns = ns;
 		this.hosts = new Map();
 		for(var rec of task.reserved.hosts[Symbol.iterator]()) {
@@ -551,7 +551,7 @@ class MemoryBucket {
 
 export class Service {
 	constructor(ns) {
-		this.debug_level = 1;
+		this.debug_level = 0;
 		this.ns = ns;
 		this.task = JSON.parse(ns.args[0]);
 		this.ports = [20];

@@ -18,10 +18,9 @@ export function align_left(s, w) {
 }
 
 export function notation(value) {
-	const letters = [" ", "k", "m", "b", "t", "q", "Q", "s", "S", "o", "n", "d"];
+	const letters = [" ", "k", "m", "b", "t", "q", "Q", "s", "S", "o", "n", "d", "u", "D", "T", "qd", "Qd", "sd", "Sd", "O", "N", "v"];
 	var index = 0;
 	while(value >= 1000) {
-		if(index + 1 >= letters.length) { break; }
 		index += 1;
 		value /= 1000;
 	}
@@ -31,7 +30,14 @@ export function notation(value) {
 		parts[1] += "0";
 	}
 	parts[1] = parts[1].substring(0,3);
-	return parts.join('.') + letters[index];
+	var letter;
+	if(index < letters.length) {
+		letter = letters[index];
+	}
+	else {
+		letter = "e" + (index * 3);
+	}
+	return parts.join('.') + letter;
 }
 
 export function commafy(s, d) {

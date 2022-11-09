@@ -458,6 +458,7 @@ function setupMessageHandlers() {
 	var handlers = new Map();
 	handlers.set("get-all-servers", async function(mcp, task) { await update_servers(mcp, task); } );
 	handlers.set("hack-constants", function(mcp, task) { define_hack_consts(mcp, task); });
+	handlers.set("delete-server", function(mcp, task) { handle_purchase_servers(mcp, task); });
 	handlers.set("purchase-servers", function(mcp, task) { handle_purchase_servers(mcp, task); });
 	handlers.set("root-server", function(mcp, task) { handle_root_server(mcp, task); });
 	handlers.set("server-details", function(mcp, task) { update_server(mcp, task); } );

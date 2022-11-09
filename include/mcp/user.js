@@ -202,8 +202,8 @@ function delete_server(mcp, rest) {
 		server_num: server_num,
 	};
 	mcp.servers.reserveTask(task, 1);
-	if(mcp.servers.reserveServer(server_name, task)) {
-		mcp.servers.server_data.delete(server_name);
+	if(mcp.servers.reserveServer(server_name)) {
+		mcp.servers.removeServer(server_name);
 		mcp.tasks.push(mcp.createTask(task));
 	}
 	else {

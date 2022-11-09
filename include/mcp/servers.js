@@ -100,6 +100,7 @@ export class Servers {
 	async reserveServer(server_name, task) {
 		this.debug(2, "reserveServer: server_name = " + server_name
 			+ "; task = " + JSON.stringify(task));
+		if(undefined === task) { task = { id: 0, }; }
 		if(undefined === task.reserved) {
 			task.reserved = {
 				total_ram: 0,
@@ -117,6 +118,14 @@ export class Servers {
 		task.reserved.total_ram += req_ram;
 		task.reserved.hosts.push({ host: server_name, ram: req_ram, threads: 0 });
 		return true;
+	}
+
+	removeServer(hostname) {
+		const useful_index = this.useful_servers.findIndex(e => e == hostname);
+		this.useful_servers.splice(useful_index, 1);
+		const purchased_index = this.purchased_servers.findIndex(e => e == hostname);
+		this.purchased_servers.splice(purchased_index, 1);
+		this.server_data.delete(hostname);
 	}
 
 	updateServer(hostname, details) {

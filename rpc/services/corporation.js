@@ -69,7 +69,7 @@ function notify_mode_command(s, msg) {
 			case "log":
 			case "print":
 			case "toast":
-				s.ns.tprint("Setting notify mode to " + notify_mode_string(new_mode)); 
+				s.ns.tprint("Setting notify mode to " + notify_mode_string(new_mode));
 				break;
 			default:
 				s.ns.tprint("Unsuported sell mode: \"" + new_mode + "\"");
@@ -77,13 +77,6 @@ function notify_mode_command(s, msg) {
 		}
 		s.task.notify_mode = new_mode;
 	}
-}
-
-function get_sell_mode(service) {
-	if(undefined === service.task.sell_mode) {
-		service.task.sell_mode = "none";
-	}
-	return service.task.sell_mode;
 }
 
 function sell_mode_string(sell_mode) {
@@ -98,8 +91,9 @@ function sell_mode_string(sell_mode) {
 
 function sell_mode_command(s, msg) {
 	const new_mode = msg.rest.shift();
+	var sell = new SellOptions(s);
 	if(undefined === new_mode) {
-		s.ns.tprint("Current share sell mode = " + sell_mode_string(get_sell_mode(s)));
+		s.ns.tprint("Current share sell mode = " + sell_mode_string(sell.sell_mode()));
 		s.ns.tprint("Sell Modes:");
 		s.ns.tprint("  none  Don't sell (Used when planning to install augments)");
 		s.ns.tprint("  slow  Buy back shares at lowest share price");
@@ -110,14 +104,18 @@ function sell_mode_command(s, msg) {
 			case "none":
 			case "slow":
 			case "fast":
+			case "grow":
 			case "deprecated":
-				s.ns.tprint("Setting sell mode to " + sell_mode_string(new_mode)); 
+				s.ns.tprint("Setting sell mode to " + sell_mode_string(new_mode));
 				break;
 			default:
 				s.ns.tprint("Unsuported sell mode: \"" + new_mode + "\"");
 				return;
 		}
 		s.task.sell_mode = new_mode;
+		s.task.min_share_price = undefined;
+		s.task.max_share_price = undefined;
+		s.task.last_share_price = undefined;
 	}
 }
 
@@ -131,22 +129,22 @@ function buy_sell_shares(s, data) {
 	const issued_shares = corporation.issuedShares;
 	const share_price = corporation.sharePrice;
 	var sell = new SellOptions(s);
-	const sell_mode = get_sell_mode(s);
+	const sell_mode = sell.sell_mode;
 	var sleep_time = 60000;
 	if((0 == issued_shares) && ("deprecated" == sell_mode)) {
 		// We bought all shares back and set dividend to 5% to raise the stock price.
 		const cooldown = corporation.shareSaleCooldown;
 		if(cooldown > 0) {
 			sleep_time = (cooldown * 200);
-			notify(s, "Sleeping for " + s.ns.tFormat(sleep_time) + " waiting for sell cooldown.", "info", 20000);
+			notify(s, "Sleeping for " + s.ns.tFormat(sleep_time) + " waiting for sell cooldown.");
 		}
 		else {
-			notify(s, "Time to sell 1,000,000 shares to raise price", "info", 20000);
+			notify(s, "Time to sell 1,000,000 shares to raise price");
 			const price_before = share_price;
 			const before_money = s.ns.getServerMoneyAvailable("home");
 			s.ns.corporation.sellShares(1000000);
 			const after_money = s.ns.getServerMoneyAvailable("home");
-			 const price_after = s.ns.corporation.getCorporation().sharePrice;
+			const price_after = s.ns.corporation.getCorporation().sharePrice;
 			s.ns.print("Sold 1,000,000 shares at $" + fmt.notation(price_before) + " for a total of $" + fmt.notation(after_money - before_money));
 			s.ns.print("Share price changed from $" + fmt.notation(price_before) + " to $" + fmt.notation(price_after));
 		}
@@ -157,21 +155,26 @@ function buy_sell_shares(s, data) {
 		if(s.task.sell_now) { normal_sell = false; }
 		if(normal_sell && ("none" == sell_mode)) {
 			sleep_time = 120000;
-			notify(s, "Current share price is $" + fmt.notation(share_price), "info", 10000);
+			var change_text = "";
+			if(undefined !== s.task.last_share_price) {
+				change_text += " (" + fmt.decimal(((share_price / s.task.last_share_price) - 1) * 100, 3) + "% change)";
+			}
+			notify(s, "Current share price is $" + fmt.notation(share_price) + change_text);
+			s.task.last_share_price = share_price;
 		}
 		else if(normal_sell && (undefined === s.task.max_share_price)) {
-			notify(s, "Initial share price is $" + fmt.notation(share_price), "info", 10000);
+			notify(s, "Initial share price is $" + fmt.notation(share_price));
 			s.task.max_share_price = share_price;
 			s.task.not_higher_count = 0;
 		}
 		else if(normal_sell && (share_price > s.task.max_share_price)) {
-			notify(s, "Share price raised to $" + fmt.notation(share_price), "info", 10000);
+			notify(s, "Share price raised to $" + fmt.notation(share_price));
 			s.task.max_share_price = share_price;
 			s.task.not_higher_count = 0;
 		}
 		else {
 			if(normal_sell && (sell.limit_count > s.task.not_higher_count)) {
-				notify(s, "Share price below highest seen (" + fmt.notation(share_price) + " < " + fmt.notation(s.task.max_share_price) + ") " + s.task.not_higher_count + " times.", "info", 10000);
+				notify(s, "Share price below highest seen (" + fmt.notation(share_price) + " < " + fmt.notation(s.task.max_share_price) + ") " + s.task.not_higher_count + " times.");
 				s.task.not_higher_count += 1;
 				sleep_time = 10000;
 			}
@@ -186,20 +189,20 @@ function buy_sell_shares(s, data) {
 					else {
 						s.task.not_higher_count = 0;
 					}
-					notify(s, "Sleeping for " + s.ns.tFormat(sleep_time) + " waiting for sell cooldown.", "info", 20000);
+					notify(s, "Sleeping for " + s.ns.tFormat(sleep_time) + " waiting for sell cooldown.");
 				}
 				else {
 					const price_before = share_price;
 					const before_money = s.ns.getServerMoneyAvailable("home");
-					const shares_to_sell = sell.shares - issued_shares;
+					const shares_to_sell = sell.sell_shares;
 					notify(s, "Selling " + shares_to_sell + " shares");
 					s.ns.corporation.sellShares(shares_to_sell);
 					const after_money = s.ns.getServerMoneyAvailable("home");
 					const price_after = s.ns.corporation.getCorporation().sharePrice;
-					s.ns.print("Sold " + fmt.commafy(sell.shares - issued_shares, 0) + " shares at $" + fmt.notation(price_before) + " for a total of $" + fmt.notation(after_money - before_money));
+					s.ns.print("Sold " + fmt.commafy(shares_to_sell, 0) + " shares at $" + fmt.notation(price_before) + " for a total of $" + fmt.notation(after_money - before_money));
 					s.ns.print("Share price changed from $" + fmt.notation(price_before) + " to $" + fmt.notation(price_after));
 					s.ns.print("Time since last augmentation installation is " + s.ns.tFormat(s.ns.getTimeSinceLastAug()));
-					switch(get_sell_mode(s)) {
+					switch(sell_mode) {
 						case "slow":
 						case "deprecated":
 							s.ns.corporation.issueDividends(0.90);
@@ -254,25 +257,39 @@ function buy_sell_shares(s, data) {
 function status(s, msg) {
 	const corporation = s.ns.corporation.getCorporation();
 	s.ns.tprint("Name = " + corporation.name);
-	s.ns.tprint("Owned shares = " + corporation.numShares);
-	s.ns.tprint("Issued shares = " + corporation.issuedShares);
-	s.ns.tprint("Share price = " + corporation.sharePrice);
+	s.ns.tprint("Owned shares = " + fmt.notation(corporation.numShares));
+	s.ns.tprint("Issued shares = " + fmt.notation(corporation.issuedShares));
+	s.ns.tprint("Share price = " + fmt.notation(corporation.sharePrice));
 	s.ns.tprint("Dividend rate = " + corporation.dividendRate);
 	s.ns.tprint("Sale cooldown = " + s.ns.tFormat(corporation.shareSaleCooldown * 200));
 }
 
 class SellOptions {
-	static default_shares = 950000000;
+	static default_sell_mode = "none";
+	static default_keep_shares = 50000000;
 	static default_limit_count = 6;
 	constructor(s) {
 		this.s = s;
 	}
-	get shares() {
-		if(undefined === this.s.task.sell_shares) { this.s.task.sell_shares = SellOptions.default_shares; }
-		return this.s.task.sell_shares;
+
+	//////////////////////////////////////////////////////////////////////////////
+	// Mode
+	//////////////////////////////////////////////////////////////////////////////
+	get sell_mode() {
+		if(undefined === this.s.task.sell_mode) { this.s.task.sell_mode = SellOptions.default_sell_mode; }
+		return this.s.task.sell_mode;
 	}
-	set shares(new_shares) {
-		this.s.task.sell_shares = new_shares;
+
+	//////////////////////////////////////////////////////////////////////////////
+	// Shares
+	//////////////////////////////////////////////////////////////////////////////
+	get sell_shares() {
+		const corporation = this.s.ns.corporation.getCorporation();
+		return corporation.numShares - this.keep_shares;
+	}
+	get keep_shares() {
+		if(undefined === this.s.task.keep_shares) { this.s.task.keep_shares = SellOptions.default_keep_shares; }
+		return this.s.task.keep_shares;
 	}
 	static sell_shares_command_func() {
 		return function (s, msg) { SellOptions.sell_shares_command(s, msg); };
@@ -280,16 +297,33 @@ class SellOptions {
 	static sell_shares_command(s, msg) {
 		const corporation = s.ns.corporation.getCorporation();
 		const max_shares = corporation.numShares + corporation.issuedShares;
-		const half_shares = Math.ceil(max_shares / 2) + 1
-		const new_shares = Number.parseInt(msg.rest.shift());
-		if(new_shares < half_shares) {
+		const half_shares = Math.floor(max_shares / 2) - 1
+		var sell_opts = new SellOptions(s);
+		const sell_shares = sell_opts.sell_shares;
+		const shares_input = msg.rest.shift();
+		if(undefined === shares_input) {
+			s.ns.tprint("Maximum shares: " + fmt.commafy(max_shares));
+			s.ns.tprint("Current shares: " + fmt.commafy(corporation.numShares));
+			s.ns.tprint("Sell shares: " + fmt.commafy(sell_shares));
+			s.ns.tprint("Keep shares: " + fmt.commafy(s.task.keep_shares));
+			s.ns.tprint("USAGE: mcp corp sell-shares <new keep shares>");
 			return;
 		}
-		else if(new_shares > max_shares) {
+		const new_shares = Number.parseInt(shares_input);
+		if(new_shares > half_shares) {
+			s.ns.tprint("New shares must be less than or equal to " + fmt.commafy(half_shares));
 			return;
 		}
-		s.task.num_shares = new_shares;
+		else if(new_shares < 0) {
+			s.ns.tprint("New shares must be greater than or equal to zero");
+			return;
+		}
+		s.task.keep_shares = new_shares;
 	}
+
+	//////////////////////////////////////////////////////////////////////////////
+	// Limit Count
+	//////////////////////////////////////////////////////////////////////////////
 	get limit_count() {
 		if(undefined === this.s.task.sell_limit_count) { this.s.task.sell_limit_count = SellOptions.default_limit_count; }
 		return this.s.task.sell_limit_count;
