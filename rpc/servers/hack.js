@@ -57,11 +57,14 @@ function setup_weaken_tasks(job) {
 	const min_sec = job.task.min_security;
 	job.ns.print("Minimum security for " + target + " is " + min_sec);
 	const cur_sec = job.ns.getServerSecurityLevel(target);
-	const threads = Math.ceil((cur_sec - min_sec) / sec_per_weaken);
+	const threads = Math.ceil(((cur_sec + 0.00001) - min_sec) / sec_per_weaken);
 	job.ns.print("Need " + threads + " threads in order to reduce from a security level of "
 		+ cur_sec + " to " + min_sec);
+	var weaken_task = get_weaken_task(job);
+	const available_threads = job.availableThreads(weaken_task);
+	job.ns.print("Available threads = " + available_threads);
 
-	add_weaken_task(job, threads);
+	job.addTasks(weaken_task, threads);
 	job.addIdleTask();
 	return true;
 }
@@ -254,6 +257,15 @@ function cleanup_hack_task(job, message) {
 			job.ns.print("Reset of hack didn't recover all of the money of " + job.task.target + ": $" + fmt.notation(cur_money) + " > $" + fmt.notation(max_money));
 			if(cur_money < (max_money*3/4)) {
 				job.ns.print("Triggering reset of hack of " + job.task.target + ": $" + fmt.notation(cur_money) + " > $" + fmt.notation(max_money));
+				job.task.reset = true;
+			}
+		}
+		const min_sec = job.task.min_security;
+		const cur_sec = job.ns.getServerSecurityLevel(job.task.target);
+		if(min_sec < cur_sec) {
+			job.ns.print("Reset of hack didn't restore the security level of " + job.task.target + ": " + cur_sec + " > " + min_sec);
+			if((min_sec*3/2) < cur_sec) {
+				job.ns.print("Triggering reset of hack of " + job.task.target + ": " + cur_sec + " > " + min_sec);
 				job.task.reset = true;
 			}
 		}

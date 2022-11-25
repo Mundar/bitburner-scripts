@@ -100,9 +100,9 @@ export async function main(ns) {
 				+ fmt.align_right(fmt.decimal(host.hack_amount * 100, 6), 10) + "%"
 				+ fmt.align_right(fmt.time(host.max_time), 12)
 				+ fmt.align_right(fmt.notation(host.max_money), 9)
-				+ fmt.align_right(hack_data.hack_threads, 5)
-				+ fmt.align_right(hack_data.count, 4)
-				+ fmt.align_right(hack_data.hack_threads * hack_data.count, 6)
+				+ fmt.align_right(hack_data.hack_threads, 8)
+				+ fmt.align_right(hack_data.count, 7)
+				+ fmt.align_right(hack_data.hack_threads * hack_data.count, 10)
 				+ fmt.align_right(fmt.notation(hack_money_est), 9)
 			);
 			rpc.task.analysis.push(host);

@@ -114,7 +114,7 @@ export class Server {
 						this.wake_time = this.tasks.at(-1).time;
 					}
 					else {
-						this.wake_time = Service.defaultWakeTime(now);
+						this.wake_time = Server.defaultWakeTime(now);
 					}
 				}
 				if(sleep_length > (this.wake_time - now)) {
@@ -597,7 +597,7 @@ export class Service {
 					this.debug(3, "message = " + JSON.stringify(message))
 					if(this.commands.has(command)) {
 						const func = this.commands.get(command);
-						func(this, message);
+						await func(this, message);
 					}
 					else {
 						this.ns.print("Command " + command + " not supported");

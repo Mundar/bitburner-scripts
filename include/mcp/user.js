@@ -225,7 +225,14 @@ function analyze_server(mcp, rest) {
 		max_threads: mcp.servers.availableThreads(mcp.ns.getScriptRam("/rpc/weaken.js", "home")),
 	};
 	if(undefined !== target) {
-		task.target = target;
+		const is_number = new RegExp('[0-9][0-9]*');
+		if(is_number.test(target)) {
+			task.hack_target_percent = parseInt(target);
+			task.targets = mcp.servers.hackable_servers;
+		}
+		else {
+			task.target = target;
+		}
 	}
 	else {
 		task.targets = mcp.servers.hackable_servers;
