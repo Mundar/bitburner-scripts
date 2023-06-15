@@ -4,17 +4,20 @@ import * as fmt from "/include/formatting.js";
 export function setupUserHandlers() {
 	var handlers = new Map();
 	handlers.set("analyze", function(mcp, rest) { analyze_server(mcp, rest); } );
+	handlers.set("add-job", async function(mcp, rest) { await add_job(mcp, rest); } );
 	handlers.set("buy", function(mcp, rest) { buy_servers(mcp, rest); } );
 	handlers.set("corp", add_service_command("Corporation service", "corporation", 18, "corp"));
 	handlers.set("delete", function(mcp, rest) { delete_server(mcp, rest); } );
 	handlers.set("favor", add_action_command("Favor calculations", "favor", "corp"));
 	handlers.set("find", function(mcp, rest) { find_server(mcp, rest); } );
+	handlers.set("free-mem", function(mcp, rest) { free_mem(mcp, rest); } );
 	handlers.set("grow", function(mcp, rest) { get_threads(mcp, rest, "Grow", "grow", "grow-threads"); } );
 	handlers.set("hack", function(mcp, rest) { get_threads(mcp, rest, "Hack", "hack", "hack-threads"); } );
 	handlers.set("hgw", add_server_command("Hack/Grow/Weaken server", "hack", 19, "hgw"));
 	handlers.set("help", function(mcp, rest) { help_handler(mcp, rest); } );
 	handlers.set("infiltrate", function(mcp, rest) { view_infiltrate(mcp, rest); } );
 	handlers.set("list", function(mcp, rest) { list_servers(mcp, rest); } );
+	handlers.set("sin", add_server_command("Singularity service", "singularity", 17, "sin"));
 	handlers.set("status", function(mcp, rest) { display_status(mcp, rest); } );
 	handlers.set("todo", function(mcp, rest) { display_todo(mcp, rest); } );
 	handlers.set("update", function(mcp, rest) { manual_update(mcp, rest); } );
@@ -81,6 +84,22 @@ function list_servers(mcp, rest) {
 	}
 }
 
+function path_to_server(mcp, target) {
+	const server = mcp.servers.getServerData(target);
+	var backtrack = [];
+	if(server !== undefined) {
+		backtrack.push(target);
+		for(var i = server.location.length; i > 0; i--) {
+			const link = mcp.servers.getServerData(server.location[i-1]);
+			backtrack.push(link.hostname);
+			if(link.backdoor) {
+				i = 1;
+			}
+		}
+	}
+	return backtrack.reverse();
+}
+
 function find_server(mcp, rest) {
 	var target = rest.shift();
 	if(target === undefined) {
@@ -99,17 +118,9 @@ function find_server(mcp, rest) {
 	else if("8" == target) { target = "b-and-a"; }
 	else if("9" == target) { target = "clarkeinc"; }
 	else if("10" == target) { target = "nwo"; }
-	const server = mcp.servers.getServerData(target);
-	if(server !== undefined) {
-		var backtrack = [target];
-		for(var i = server.location.length; i > 0; i--) {
-			const link = mcp.servers.getServerData(server.location[i-1]);
-			backtrack.push(link.hostname);
-			if(link.backdoor) {
-				i = 1;
-			}
-		}
-		mcp.ns.tprint("Find: " + target + ": " + backtrack.reverse().join("->"));
+	const backtrack = path_to_server(mcp, target);
+	if(backtrack.length > 0) {
+		mcp.ns.tprint("Find: " + target + ": " + backtrack.join("->"));
 	}
 }
 
@@ -310,6 +321,47 @@ function server_command(mcp, rest, label, server, port, cmd) {
 	});
 	mcp.debug(2, label + " task = " + JSON.stringify(task));
 	mcp.tasks.push(task);
+}
+
+async function add_job(mcp, rest) {
+	var job_spec = JSON.parse(rest.join(' '));
+	mcp.debug(2, "Add job specifiction = " + JSON.stringify(job_spec));
+	if(undefined === job_spec) { return; }
+	if(undefined === job_spec.job) { return; }
+	if(undefined === job_spec.label) { return; }
+	if(undefined === job_spec.server) { return; }
+	if(undefined === job_spec.server_port) { return; }
+	var job = mcp.createTask(job_spec.job);
+	var ram;
+	if(undefined !== job_spec.script) {  ram = mcp.ns.getScriptRam(job_spec.script, "home"); }
+	else if(undefined !== job_sepc.ram) { ram = job_spec.ram; }
+	else { return; }
+	var threads = 1;
+	if(undefined !== job_spec.threads) { threads = job_spec.threads; }
+	mcp.debug(2, "ram = " + ram + "; threads = " + threads);
+	await mcp.servers.reserveMemory(ram, threads, job);
+	mcp.debug(2, "Add job job = " + JSON.stringify(job));
+	var task = mcp.createTask({
+		label: job_spec.label,
+		server: job_spec.server,
+		server_port: job_spec.server_port,
+		job: job,
+	});
+	mcp.debug(2, "Add job server task = " + JSON.stringify(task));
+	mcp.tasks.push(task);
+}
+
+function free_mem(mcp, rest) {
+	for(var host of mcp.servers.useful_servers[Symbol.iterator]()) {
+		const data = mcp.servers.getServerData(host);
+		/*
+		mcp.ns.tprint("  " + fmt.align_left(host, 20)
+			+ fmt.align_right(fmt.commafy(data.max_ram, 0), 14)
+			+ fmt.align_right(fmt.commafy(data.freeRam(), 2), 17)
+			+ fmt.align_right(fmt.commafy(data.freeIdleRam(), 2), 17)
+		);
+		*/
+	}
 }
 
 function get_threads(mcp, rest, proper_name, name, action) {

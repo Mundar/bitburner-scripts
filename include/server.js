@@ -20,22 +20,32 @@ export class Server {
 		this.message_queue = [];
 		this.job_handlers = new Map();
 		this.idle_action = "hack-exp";
-		this.wake_time = Server.defaultWakeTime(ns.getTimeSinceLastAug());
+		this.quitting = false;
+		this.wake_time = Server.defaultWakeTime(Date.now());
 		this.tasks = [];
 		this.commands = new Map();
-		this.commands.set("debug", function(service, message) { service.displayDebug(); });
-		this.commands.set("finish", function(service, message) { service.finishCommand(message); });
-		this.commands.set("jobs", function(service, message) { service.displayJobs(); });
-		//this.commands.set("quit", function(service, message) { service.not_done = false; });
-		this.commands.set("tail", function(service, message) { service.ns.tail(); });
+		this.commands.set("debug", function(server, message) { server.displayDebug(); });
+		this.commands.set("finish", function(server, message) { server.finishCommand(message); });
+		this.commands.set("jobs", function(server, message) { server.displayJobs(); });
+		this.commands.set("quit", function(server, message) { server.quitCommand(message); });
+		this.commands.set("tail", function(server, message) { server.ns.tail(); });
 		if((this.task.job !== undefined) || (this.task.command !== undefined)) {
 			this.io.sendToSelf(this.task);
 		}
 	}
+	set debugLevel(level) {
+		this.debug_level = level;
+	}
 	get not_done() {
 		return (0 < this.jobs.size)
-		|| (this.ns.getTimeSinceLastAug() < this.wake_time)
+		|| ((0 < this.tasks.length) && !this.quitting)
 		|| (this.io.messageAvailable());
+	}
+	quitCommand(msg) {
+		this.quitting = true;
+		for(const job of this.jobs.values()) {
+			job.finish = true;
+		}
 	}
 	async tasksLoop() {
 		var disabled_sleep_log = false;
@@ -103,8 +113,8 @@ export class Server {
 					}
 				}
 			}
-			else if(this.ns.getTimeSinceLastAug() >= this.wake_time) {
-				const now = this.ns.getTimeSinceLastAug();
+			else if(Date.now() >= this.wake_time) {
+				const now = Date.now();
 				if(now >= this.wake_time) {
 					while((0 < this.tasks.length) && (now > this.tasks.at(-1).time)) {
 						const entry = this.tasks.pop();
@@ -132,7 +142,7 @@ export class Server {
 		this.commands.set(name, func);
 	}
 	addTask(func, data, delay) {
-		var time = this.ns.getTimeSinceLastAug();
+		var time = Date.now();
 		if(undefined !== delay) { time += delay; }
 		if(time < this.wake_time) { this.wake_time = time; }
 		this.tasks.push({ time: time, func: func, data: data });
@@ -176,11 +186,12 @@ export class Server {
 		}
 	}
 	displayDebug() {
-		const now = this.ns.getTimeSinceLastAug();
+		const now = Date.now();
 		this.ns.tprint("debug_level = " + this.debug_level);
 		this.ns.tprint("now = " + now);
 		this.ns.tprint("wake_time = " + this.wake_time + " (" + this.ns.tFormat(this.wake_time - now) + ")");
 		this.ns.tprint("not_done = " + this.not_done);
+		this.ns.tprint("quitting = " + this.quitting);
 		this.ns.tprint("job_handlers = " + JSON.stringify(Array.from(this.job_handlers.keys())));
 		this.ns.tprint("Job ID Action    Description");
 		this.ns.tprint("------ --------- ----------------------------------------");
@@ -568,7 +579,7 @@ export class Service {
 		}
 		this.port = this.task.service_port;
 		this.io = new IO(ns, this.port);
-		this.wake_time = Service.defaultWakeTime(ns.getTimeSinceLastAug());
+		this.wake_time = Service.defaultWakeTime(Date.now());
 		this.tasks = [];
 		this.not_done = true;
 		this.commands = new Map();
@@ -607,8 +618,8 @@ export class Service {
 					this.ns.print("ERROR: Received unsuported message: " + JSON.stringify(message));
 				}
 			}
-			else if(this.ns.getTimeSinceLastAug() >= this.wake_time) {
-				const now = this.ns.getTimeSinceLastAug();
+			else if(Date.now() >= this.wake_time) {
+				const now = Date.now();
 				if(now >= this.wake_time) {
 					if(0 == this.tasks.length) { this.not_done = false; }
 					while((0 < this.tasks.length) && (now > this.tasks.at(-1).time)) {
@@ -644,21 +655,21 @@ export class Service {
 		this.commands.set(name, func);
 	}
 	addTask(func, data, delay) {
-		var time = this.ns.getTimeSinceLastAug();
+		var time = Date.now();
 		if(undefined !== delay) { time += delay; }
 		if(time < this.wake_time) { this.wake_time = time; }
 		this.tasks.push({ time: time, func: func, data: data });
 		this.tasks.sort((a,b) => b.time - a.time);
 	}
 	addPreciseTask(func, data, time) {
-		var time = this.ns.getTimeSinceLastAug();
+		var time = Date.now();
 		if(undefined !== delay) { time += delay; }
 		if(time < this.wake_time) { this.wake_time = time; }
 		this.tasks.push({ time: time, func: func, data: data });
 		this.tasks.sort((a,b) => b.time - a.time);
 	}
 	displayDebug() {
-		const now = this.ns.getTimeSinceLastAug();
+		const now = Date.now();
 		this.ns.tprint("debug_level = " + this.debug_level);
 		this.ns.tprint("now = " + now);
 		this.ns.tprint("wake_time = " + this.wake_time + " (" + this.ns.tFormat(this.wake_time - now) + ")");

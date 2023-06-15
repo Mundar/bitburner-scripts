@@ -28,7 +28,7 @@ class MCP {
 		this.message_handlers = setupMessageHandlers();
 		this.user_handlers = setupUserHandlers();
 		this.returned_data = {};
-		this.next_minute = ns.getTimeSinceLastAug() + 5000;	// Run first minute tasks after 5 seconds.
+		this.next_minute = Date.now() + 5000;	// Run first minute tasks after 5 seconds.
 		this.minute_tasks = setupMinuteTasks();
 		this.next_minute_tasks = [];
 		this.next_ten = 10;
@@ -73,8 +73,8 @@ class MCP {
 				}
 			}
 			// Check to see if a minute has passed
-			else if(this.ns.getTimeSinceLastAug() > this.next_minute) {
-				this.next_minute = this.ns.getTimeSinceLastAug() + 60000;
+			else if(Date.now() > this.next_minute) {
+				this.next_minute = Date.now() + 60000;
 				for(var i = 0; i < this.minute_tasks.length; i++) {
 					this.tasks.push(this.copyTask(this.minute_tasks[i]));
 				}

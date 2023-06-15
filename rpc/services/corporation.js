@@ -110,7 +110,7 @@ function sell_mode_command(s, msg) {
 	const new_mode = msg.rest.shift();
 	var sell = new SellOptions(s);
 	if(undefined === new_mode) {
-		s.ns.tprint("Current share sell mode = " + sell_mode_string(sell.sell_mode()));
+		s.ns.tprint("Current share sell mode = " + sell_mode_string(sell.sell_mode));
 		s.ns.tprint("Sell Modes:");
 		s.ns.tprint("  none  Don't sell (Used when planning to install augments)");
 		s.ns.tprint("  slow  Buy back shares at lowest share price");
@@ -222,7 +222,7 @@ function buy_sell_shares(s, data) {
 					const price_after = s.ns.corporation.getCorporation().sharePrice;
 					s.ns.print("Sold " + fmt.commafy(shares_to_sell, 0) + " shares at $" + fmt.notation(price_before) + " for a total of $" + fmt.notation(after_money - before_money));
 					s.ns.print("Share price changed from $" + fmt.notation(price_before) + " to $" + fmt.notation(price_after));
-					s.ns.print("Time since last augmentation installation is " + s.ns.tFormat(s.ns.getTimeSinceLastAug()));
+					s.ns.print("Time since last augmentation installation is " + s.ns.tFormat(Date.now() - s.ns.getResetInfo().lastAugReset));
 					switch(sell_mode) {
 						case "slow":
 						case "deprecated":
@@ -281,7 +281,7 @@ function buy_sell_shares(s, data) {
 					s.ns.corporation.buyBackShares(issued_shares);
 					const after_money = s.ns.getServerMoneyAvailable("home");
 					s.ns.print("Bought back " + fmt.commafy(issued_shares, 0) + " shares at $" + fmt.notation(share_price) + " for a total of $" + fmt.notation(before_money - after_money));
-					s.ns.print("Time since last augmentation installation is " + s.ns.tFormat(s.ns.getTimeSinceLastAug()));
+					s.ns.print("Time since last augmentation installation is " + s.ns.tFormat(Date.now() - s.ns.getResetInfo().lastAugReset));
 					s.ns.corporation.issueDividends(0.05);
 				}
 			}
@@ -410,11 +410,13 @@ class CorpData {
 	}
 	static testFunc(s, msg) {
 		s.ns.tprint("msg = " + JSON.stringify(msg));
-		s.ns.tprint("Industry types = " + s.ns.corporation.getIndustryTypes().join(", "));
-		s.ns.tprint("Material Names = " + s.ns.corporation.getMaterialNames().join(", "));
-		s.ns.tprint("Research Names = " + s.ns.corporation.getResearchNames().join(", "));
-		s.ns.tprint("Unlockables = " + s.ns.corporation.getUnlockables().join(", "));
-		s.ns.tprint("Upgrade Names = " + s.ns.corporation.getUpgradeNames().join(", "));
+		const corp_consts = s.ns.corporation.getConstants();
+		s.ns.tprint("Corporation Constants = " + JSON.stringify(corp_consts));
+		s.ns.tprint("Industry types = " + corp_consts.industryNames.join(", "));
+		s.ns.tprint("Material Names = " + corp_consts.materialNames.join(", "));
+		s.ns.tprint("Research Names = " + corp_consts.researchNames.join(", "));
+		s.ns.tprint("Unlockables = " + corp_consts.unlockNames.join(", "));
+		s.ns.tprint("Upgrade Names = " + corp_consts.upgradeNames.join(", "));
 		var corp = new CorpData(s);
 		s.ns.tprint("Corporation = " + JSON.stringify(corp.corp));
 		s.ns.tprint("CorpData divisionNames = " + JSON.stringify(corp.divisionNames));
@@ -430,7 +432,7 @@ class CorpData {
 		var corp = new CorpData(s);
 		if(corp.verifyOffice()) { return; }
 		const division = await corp.chooseDivision();
-		if("" == division) { return; }
+		if(("" == division) || (undefined === division)) { return; }
 		const div_data = s.ns.corporation.getDivision(division);
 		const makesProducts = div_data.makesProducts;
 		s.ns.tprint("Division = " + division);
@@ -784,8 +786,15 @@ class CorpData {
 	static updateResearchTask(s, data) {
 		var sleep_time = 120000;
 		var corp = new CorpData(s);
-		for(var corp_div of corp.corp.divisions[Symbol.iterator]()) {
-			const division = corp_div.name;
+		if(!corp.hasOfficeAPI) {
+			s.addTask(function(s, data) { CorpData.updateResearchTask(s, data); }, data, sleep_time);
+			return;
+		}
+		s.ns.tprint("updateResearchTask: corp.corp = " + JSON.stringify(corp.corp));
+		for(var division of corp.corp.divisions[Symbol.iterator]()) {
+			const corp_div = s.ns.corporation.getDivision(division);
+			s.ns.tprint("updateResearchTask: division = " + division);
+			s.ns.tprint("updateResearchTask: corp_div = " + JSON.stringify(corp_div));
 			if(corp.needsResearch(division)) {
 				var div_data = corp.getDivisionData(corp_div.name);
 				var research_cost = div_data.next_research_cost;
@@ -827,6 +836,7 @@ class CorpData {
 		return needs_research;
 	}
 	nextResearch(division) {
+		this.ns.tprint("nextResearch: division = " + division);
 		var division_data = this.getDivisionData(division);
 		const end_index = CorpData.research_order.length;
 		var index = division_data.next_research_index;
@@ -953,7 +963,7 @@ class CorpData {
 		}
 	}
 	async chooseNewIndustry() {
-		var industry_types = this.s.ns.corporation.getIndustryTypes();
+		var industry_types = this.s.ns.corporation.getConstants().industryNames;
 		// For some reason, the non-industry type "Hardware" is returned by getIndustryTypes() instead of "Computer".
 		const computer_index = industry_types.findIndex(v => v == "Hardware");
 		industry_types.splice(computer_index, 1, "Computer")
@@ -988,10 +998,10 @@ class CorpData {
 		return true;
 	}
 	get hasOfficeAPI() {
-		return this.s.ns.corporation.hasUnlockUpgrade("Office API");
+		return this.s.ns.corporation.hasUnlock("Office API");
 	}
 	get hasWarehouseAPI() {
-		return this.s.ns.corporation.hasUnlockUpgrade("Warehouse API");
+		return this.s.ns.corporation.hasUnlock("Warehouse API");
 	}
 }
 

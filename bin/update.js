@@ -1,5 +1,6 @@
 /** @param {NS} ns */
 export async function main(ns) {
+	await getFile(ns, "/bin/player-info.js");
 	await getFile(ns, "/bin/mcp.js");
 	await getFile(ns, "/bin/send.js");
 	await getFile(ns, "/bin/try-rpc.js");
@@ -37,6 +38,7 @@ export async function main(ns) {
 	await getFile(ns, "/rpc/idle/share.js");
 
 	await getFile(ns, "/rpc/servers/hack.js");
+	await getFile(ns, "/rpc/servers/singularity.js");
 
 	await getFile(ns, "/rpc/services/corporation.js");
 }
