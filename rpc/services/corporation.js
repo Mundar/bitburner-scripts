@@ -790,16 +790,19 @@ class CorpData {
 			s.addTask(function(s, data) { CorpData.updateResearchTask(s, data); }, data, sleep_time);
 			return;
 		}
-		s.ns.tprint("updateResearchTask: corp.corp = " + JSON.stringify(corp.corp));
+		//s.ns.tprint("updateResearchTask: corp.corp = " + JSON.stringify(corp.corp));
 		for(var division of corp.corp.divisions[Symbol.iterator]()) {
 			const corp_div = s.ns.corporation.getDivision(division);
-			s.ns.tprint("updateResearchTask: division = " + division);
-			s.ns.tprint("updateResearchTask: corp_div = " + JSON.stringify(corp_div));
+			//s.ns.tprint("updateResearchTask: division = " + division);
+			//s.ns.tprint("updateResearchTask: corp_div = " + JSON.stringify(corp_div));
 			if(corp.needsResearch(division)) {
 				var div_data = corp.getDivisionData(corp_div.name);
+				s.ns.tprint("updateResearchTask: div_data = " + JSON.stringify(div_data));
 				var research_cost = div_data.next_research_cost;
+				s.ns.tprint("updateResearchTask: research_cost = " + research_cost);
 				if(corp_div.research > research_cost) {
 					const research_name = CorpData.research_order[div_data.next_research_index];
+					s.ns.tprint("updateResearchTask: research_name = " + research_name);
 					notify(s, "Purchasing research " + research_name + " at the " + division + " division");
 					s.ns.corporation.research(division, research_name);
 					if(!corp.nextResearch(division)) {

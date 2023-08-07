@@ -32,7 +32,7 @@ export class Task {
 			return undefined;
 		}
 		if(undefined !== this.data.script) {
-			if(ns.fileExists(this.data.script)) {
+			if(this.ns.fileExists(this.data.script)) {
 				this.data.script_exists = true;
 				return this.data.script;
 			}

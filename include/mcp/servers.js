@@ -67,13 +67,13 @@ export class Servers {
 	}
 
 	async reserveTask(task, requested_threads) {
-		this.debug(3, "reserveTask: ram = " + ram);
 		var my_task = new Task(this.ns, task);
 		const script = my_task.script;
 		if(undefined === script) { return false; }
 		this.debug(1, "my_task.data = " + JSON.stringify(my_task.data));
 		this.debug(1, "task = " + JSON.stringify(task));
-		const ram = ns.getScriptRam(script, "home");
+		const ram = this.ns.getScriptRam(script, "home");
+		this.debug(3, "reserveTask: ram = " + ram);
 		return this.reserveMemory(ram, requested_threads, task);
 	}
 
@@ -111,6 +111,7 @@ export class Servers {
 		this.debug(3, "reserveMemory: task = " + JSON.stringify(task));
 		if("home" == server_name) { return false; }
 		var server = this.getServerData(server_name);
+		if(undefined === server) { return false; }
 		const req_ram = server.max_ram;
 		const free_mem = server.freeRam();
 		if(free_mem < req_ram) { return false; }
@@ -218,7 +219,10 @@ export class Servers {
 		if((task.reserved !== undefined)) {
 			for(var host of task.reserved.hosts[Symbol.iterator]()) {
 				this.debug(2, "Servers.finishedTask: reserved = " + JSON.stringify(host));
-				this.getServerData(host.host).releaseRam(task.id);
+				var server = this.getServerData(host.host);
+				if(undefined !== server) {
+					server.releaseRam(task.id);
+				}
 			}
 		}
 	}

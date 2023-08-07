@@ -50,19 +50,29 @@ function get_hack_task(job, delay) { return get_task(job, "Hack", "hack", delay)
 
 function add_weaken_task(job, threads, delay) { job.addTasks(get_weaken_task(job, delay), threads); }
 
-function setup_weaken_tasks(job) {
+function needed_weaken_threads(job) {
 	const target = job.task.target;
-	// First, determine how many threads we need.
 	const sec_per_weaken = job.server.task.hack_consts.sec_per_weaken[0];
 	const min_sec = job.task.min_security;
 	job.ns.print("Minimum security for " + target + " is " + min_sec);
 	const cur_sec = job.ns.getServerSecurityLevel(target);
+	if(cur_sec == min_sec) { return 0; }
 	const threads = Math.ceil(((cur_sec + 0.00001) - min_sec) / sec_per_weaken);
 	job.ns.print("Need " + threads + " threads in order to reduce from a security level of "
 		+ cur_sec + " to " + min_sec);
+	return threads;
+}
+
+function setup_weaken_tasks(job) {
+	const target = job.task.target;
+	// First, determine how many threads we need.
+	const threads = needed_weaken_threads(job);
+	if(0 == threads) { return false; }
 	var weaken_task = get_weaken_task(job);
 	const available_threads = job.availableThreads(weaken_task);
 	job.ns.print("Available threads = " + available_threads);
+	const weaken_time = job.ns.getWeakenTime(target);
+	job.ns.print("Weaken time = " + job.ns.tFormat(weaken_time));
 
 	job.addTasks(weaken_task, threads);
 	job.addIdleTask();
@@ -98,11 +108,7 @@ function setup_grow_tasks(job) {
 	job.ns.print("Minimum security = " + min_sec);
 	const cur_sec = job.ns.getServerSecurityLevel(target);
 	job.ns.print("Current security = " + cur_sec);
-	if(min_sec < cur_sec) {
-		job.ns.print("Weakening host " + target + " because it is not fully weakened (" + cur_sec + " > " + min_sec + ")");
-		return setup_weaken_tasks(job);
-	}
-
+	var extra_weaken_tasks = needed_weaken_threads(job);
 	const weaken_time = job.ns.getWeakenTime(target);
 	job.ns.print("Weaken time = " + job.ns.tFormat(weaken_time));
 	const grow_time = job.ns.getGrowTime(target) + 1000;	// Grow should finish 1 second before the weaken
@@ -126,7 +132,7 @@ function setup_grow_tasks(job) {
 	job.ns.print("Grow threads = " + grow_threads);
 	const sec_per_weaken = job.server.task.hack_consts.sec_per_weaken[0];
 	const sec_per_grow = job.server.task.hack_consts.sec_per_grow;
-	var weaken_threads = Math.ceil((grow_threads * sec_per_grow) / sec_per_weaken);
+	var weaken_threads = Math.ceil((grow_threads * sec_per_grow) / sec_per_weaken) + extra_weaken_tasks;
 	job.ns.print("Weaken threads = " + weaken_threads);
 	const available_threads = job.availableThreads(weaken_task);
 	job.ns.print("Available threads = " + available_threads);
@@ -172,11 +178,6 @@ function setup_hack_tasks(job) {
 	job.ns.print("Minimum security = " + min_sec);
 	const cur_sec = job.ns.getServerSecurityLevel(target);
 	job.ns.print("Current security = " + cur_sec);
-	if(min_sec < cur_sec) {
-		job.ns.print("Weakening host " + target + " because it is not fully weakened (" + cur_sec + " > " + min_sec + ")");
-		return setup_weaken_tasks(job);
-	}
-
 	const max_money = job.task.max_money;
 	job.ns.print("Maximum money = $" + max_money);
 	const cur_money = job.ns.getServerMoneyAvailable(target);
