@@ -17,6 +17,7 @@ export async function main(ns) {
 		msg.rest.unshift('print');
 		notify_mode_command(s, msg);
 	});
+	service.addCommand("next-mode", function(s, msg) { next_mode_command(s, msg); });
 	service.addCommand("notify-mode", function(s, msg) { notify_mode_command(s, msg); });
 	service.addCommand("new-city", async function(s, msg) { await CorpData.newCityFunc(s, msg); });
 	service.addCommand("new-division", async function(s, msg) { await CorpData.newDivisionFunc(s, msg); });
@@ -124,15 +125,44 @@ function sell_mode_command(s, msg) {
 			case "grow":
 			case "deprecated":
 				s.ns.tprint("Setting sell mode to " + sell_mode_string(new_mode));
+				s.task.sell_mode = new_mode;
+				break;
+			case "fast-once":
+				s.task.sell_mode = "fast";
+				s.task.next_mode = "none";
 				break;
 			default:
 				s.ns.tprint("Unsuported sell mode: \"" + new_mode + "\"");
 				return;
 		}
-		s.task.sell_mode = new_mode;
 		s.task.min_share_price = undefined;
 		s.task.max_share_price = undefined;
 		s.task.last_share_price = undefined;
+	}
+}
+
+function next_mode_command(s, msg) {
+	const new_mode = msg.rest.shift();
+	var sell = new SellOptions(s);
+	if(undefined === new_mode) {
+		s.ns.tprint("Current share next mode = " + sell_mode_string(sell.next_mode));
+		s.ns.tprint("Sell Modes:");
+		s.ns.tprint("  none  Don't sell (Used when planning to install augments)");
+		s.ns.tprint("  slow  Buy back shares at lowest share price");
+		s.ns.tprint("  fast  Buy back shares immediately after selling");
+	}
+	else {
+		switch(new_mode) {
+			case "none":
+			case "slow":
+			case "fast":
+				s.ns.tprint("Setting next mode to " + sell_mode_string(new_mode));
+				break;
+			default:
+				s.ns.tprint("Unsuported sell mode: \"" + new_mode + "\"");
+				return;
+		}
+		s.task.next_mode = new_mode;
 	}
 }
 
@@ -283,6 +313,7 @@ function buy_sell_shares(s, data) {
 					s.ns.print("Bought back " + fmt.commafy(issued_shares, 0) + " shares at $" + fmt.notation(share_price) + " for a total of $" + fmt.notation(before_money - after_money));
 					s.ns.print("Time since last augmentation installation is " + s.ns.tFormat(Date.now() - s.ns.getResetInfo().lastAugReset));
 					s.ns.corporation.issueDividends(0.05);
+					s.task.sell_mode = sell.next_mode;
 				}
 			}
 		}
@@ -314,6 +345,18 @@ class SellOptions {
 	get sell_mode() {
 		if(undefined === this.s.task.sell_mode) { this.s.task.sell_mode = SellOptions.default_sell_mode; }
 		return this.s.task.sell_mode;
+	}
+
+	get next_mode() {
+		if(undefined === this.s.task.next_mode) {
+			if(undefined === this.s.task.next_mode) {
+				this.s.task.next_mode = SellOptions.default_sell_mode;
+			}
+			else {
+				this.s.task.next_mode = this.s.task.sell_mode;
+			}
+		}
+		return this.s.task.next_mode;
 	}
 
 	//////////////////////////////////////////////////////////////////////////////

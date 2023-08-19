@@ -108,7 +108,7 @@ function setup_grow_tasks(job) {
 	job.ns.print("Minimum security = " + min_sec);
 	const cur_sec = job.ns.getServerSecurityLevel(target);
 	job.ns.print("Current security = " + cur_sec);
-	var extra_weaken_tasks = needed_weaken_threads(job);
+	var extra_weaken_threads = needed_weaken_threads(job);
 	const weaken_time = job.ns.getWeakenTime(target);
 	job.ns.print("Weaken time = " + job.ns.tFormat(weaken_time));
 	const grow_time = job.ns.getGrowTime(target) + 1000;	// Grow should finish 1 second before the weaken
@@ -132,14 +132,14 @@ function setup_grow_tasks(job) {
 	job.ns.print("Grow threads = " + grow_threads);
 	const sec_per_weaken = job.server.task.hack_consts.sec_per_weaken[0];
 	const sec_per_grow = job.server.task.hack_consts.sec_per_grow;
-	var weaken_threads = Math.ceil((grow_threads * sec_per_grow) / sec_per_weaken) + extra_weaken_tasks;
+	var weaken_threads = Math.ceil((grow_threads * sec_per_grow) / sec_per_weaken) + extra_weaken_threads;
 	job.ns.print("Weaken threads = " + weaken_threads);
 	const available_threads = job.availableThreads(weaken_task);
 	job.ns.print("Available threads = " + available_threads);
 
 	if(available_threads < (weaken_threads + grow_threads)) {
 		job.ns.print("Not enough threads to fully grow (" + (weaken_threads + grow_threads) + " > " + available_threads + ")");
-		weaken_threads = Math.ceil(available_threads / (1 + (sec_per_weaken / sec_per_grow)));
+		weaken_threads = Math.ceil((available_threads - extra_weaken_threads) / (1 + (sec_per_weaken / sec_per_grow))) + extra_weaken_threads;
 		job.ns.print("Weaken threads = " + weaken_threads);
 		grow_threads = available_threads - weaken_threads;
 		job.ns.print("Grow threads = " + grow_threads);
